@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+
+# Test and coverage output
+coverage/
+
+# TypeScript incremental state
+*.tsbuildinfo
+
+# Local editor and tool state
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# OS artefacts
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment files. Nothing in this project needs one: the app has no backend
+# and makes no network requests. Ignored so a stray file cannot become a commit.
+.env
+.env.*
+
+# Cordova. Covered here rather than in a native/.gitignore, because native/ does
+# not exist until M6 and one list is easier to keep correct than two.
+#
+# www/ is the output of `npm run build:native`, regenerated from src/ on every
+# build. platforms/ and plugins/ are recreated by `cordova platform add` from
+# config.xml and native/package.json. None of the three is source.
+native/www/
+native/platforms/
+native/plugins/
+
+# Signing material, anywhere in the tree. A keystore or its base64 form must
+# never be committed: CI reconstructs both from repository secrets at build
+# time. A backstop, not permission to keep them here — see plan.md section 10.3.
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.base64
+build.json

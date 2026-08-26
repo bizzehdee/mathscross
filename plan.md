@@ -41,7 +41,7 @@ workflows, and the same native shell settings. Section 12 lists the entries in
 `C:\code\sudoku\.learnings\` that apply here and must be read before the work they
 govern.
 
-Deviating from a sibling convention is allowed only with a stated reason. Five
+Deviating from a sibling convention is allowed only with a stated reason. Six
 deviations are already known and are recorded in section 11.
 
 ### 1.2 Confirmed decisions
@@ -1100,7 +1100,7 @@ Rules:
 
 ## 11. Deviations from the sibling
 
-Five, each with a reason. Any further deviation must be added here with its reason.
+Six, each with a reason. Any further deviation must be added here with its reason.
 
 1. **`--colour-accent` differs.** Two apps from the same author with the same accent
    are hard to tell apart in a task switcher. Section 8.1.
@@ -1114,6 +1114,10 @@ Five, each with a reason. Any further deviation must be added here with its reas
 5. **A CI bundle size gate.** The sibling has no size ceiling. Added here because a
    dependency-free bundle is easy to keep small and easy to lose by accident.
    Section 8.4. Consider back-porting.
+6. **One `.gitignore` at the root, not two.** The sibling splits Cordova's ignores
+   into `native/.gitignore`. Here they live in the root file, because `native/` does
+   not exist until M6 and one list is easier to keep correct than two. If `native/`
+   ever gains ignores specific to a local workflow, split it then.
 
 ## 12. Sibling learnings that apply
 
