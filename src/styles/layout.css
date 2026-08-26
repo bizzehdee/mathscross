@@ -407,3 +407,59 @@ body {
   border-radius: var(--radius);
   font-size: 0.9rem;
 }
+
+/* Statistics and settings */
+
+.stats,
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--colour-surface-raised);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.stats h2,
+.settings h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.stats__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.9rem;
+}
+
+.stats__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.stats__label {
+  text-transform: capitalize;
+  color: var(--colour-ink-muted);
+}
+
+.stats__value {
+  font-variant-numeric: tabular-nums;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.stats__daily {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--colour-ink-muted);
+}
+
+.settings__themes {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

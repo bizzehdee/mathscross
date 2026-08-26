@@ -109,6 +109,7 @@ export function createConfig(target: BuildTarget) {
       emptyOutDir: true,
     },
     plugins: [
+      relaxCspForDevServer(),
       VitePWA({
         // Emits no service worker and no manifest for a native build. A shell
         // already holds every asset on the device, so there is nothing to cache
@@ -133,9 +134,24 @@ export function createConfig(target: BuildTarget) {
           // theme. Plan section 8.1.
           theme_color: '#3a5fa8',
           background_color: '#f7f7f5',
-          // Icons are authored at M5, per plan section 9.5. The array is absent
-          // rather than pointing at files that do not exist yet, so the manifest
-          // is valid at every commit.
+          // Relative, so they resolve against the manifest's own location. An
+          // absolute '/icons/...' would point outside the subdirectory on Pages.
+          icons: [
+            { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+            { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+            {
+              src: 'icons/icon-192-maskable.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+            {
+              src: 'icons/icon-512-maskable.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
         },
         workbox: {
           // Precache everything. The application is static and makes no network
@@ -149,6 +165,33 @@ export function createConfig(target: BuildTarget) {
       }),
     ],
   })
+}
+
+/**
+ * Lets the dev server's HMR websocket through the Content-Security-Policy.
+ *
+ * `index.html` sets `connect-src 'none'`, which is exactly right for the shipped
+ * app — it makes the offline guarantee enforceable rather than merely intended — and
+ * exactly wrong for `vite dev`, whose hot-update channel is a websocket to
+ * localhost. Blocked, HMR silently never applies: the file changes on disk, the
+ * browser keeps the old module, and the change looks like it did not work. That
+ * cost a real misdiagnosis at M5 before the console explained it.
+ *
+ * So the directive is relaxed for the dev server only. `apply: 'serve'` means this
+ * plugin does not run during a build, and the two build targets carry the strict
+ * policy untouched.
+ */
+function relaxCspForDevServer() {
+  return {
+    name: 'mathscross:relax-csp-for-dev-server',
+    apply: 'serve' as const,
+    transformIndexHtml(html: string): string {
+      return html.replace(
+        "connect-src 'none'",
+        "connect-src 'self' ws: wss:",
+      )
+    },
+  }
 }
 
 export default createConfig('web')

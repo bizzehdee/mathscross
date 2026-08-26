@@ -12,14 +12,50 @@ import { parametersFor } from '../engine/difficulty'
 import { solve } from '../engine/solver'
 import { STARTER_DIFFICULTY, starterGrid } from '../engine/starter'
 import { CellKind, EMPTY } from '../engine/types'
+import { loadStats, type StorageLike } from '../game/persist'
 import { mountApp } from './app'
 
-function mount(): HTMLElement {
+/**
+ * A fresh in-memory storage per test.
+ *
+ * The app resumes from storage now, and jsdom's localStorage is shared across every
+ * test in a file — so without this, one test's half-finished board is restored into
+ * the next and the assertions drift. Injecting it also fixes "today", which the
+ * daily depends on.
+ */
+function memoryStorage(): StorageLike {
+  const data = new Map<string, string>()
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => {
+      data.set(key, value)
+    },
+    removeItem: (key) => {
+      data.delete(key)
+    },
+  }
+}
+
+const TODAY = new Date('2026-08-26T12:00:00Z')
+
+function mount(overrides: Partial<Parameters<typeof mountApp>[1]> = {}): HTMLElement {
   const root = document.createElement('div')
   root.id = 'app'
   document.body.replaceChildren(root)
-  mountApp(root, { version: 'test', client: { request: () => never() } })
+  mountApp(root, {
+    version: 'test',
+    client: { request: () => never() },
+    storage: memoryStorage(),
+    now: () => TODAY,
+    themeRoot: document.createElement('div'),
+    ...overrides,
+  })
   return root
+}
+
+/** Difficulty buttons only, excluding the Daily button they share a group with. */
+function difficultyButtons(root: HTMLElement): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>('.menu [data-difficulty]')]
 }
 
 /** A request that never settles. Nothing in these tests starts a new game. */
@@ -219,7 +255,7 @@ function solution(): [number, number][] {
 describe('the difficulty menu', () => {
   it('offers all three difficulties, describing what each asks', () => {
     const root = mount()
-    const buttons = [...root.querySelectorAll<HTMLElement>('.menu .button')]
+    const buttons = difficultyButtons(root)
 
     expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Medium', 'Hard'])
     // The label says what the difficulty actually involves, so a player choosing
@@ -229,7 +265,7 @@ describe('the difficulty menu', () => {
 
   it('marks the difficulty in play as pressed', () => {
     const root = mount()
-    const easy = root.querySelector<HTMLElement>('.menu .button')
+    const easy = difficultyButtons(root)[0]
 
     expect(easy?.getAttribute('aria-pressed')).toBe('true')
   })
@@ -238,11 +274,7 @@ describe('the difficulty menu', () => {
     // One free-play slot, so a new puzzle replaces the current one. Losing a
     // half-finished board to a mis-tap would be the most annoying possible bug.
     const asked: string[] = []
-    const root = document.createElement('div')
-    document.body.replaceChildren(root)
-    mountApp(root, {
-      version: 'test',
-      client: { request: () => never() },
+    const root = mount({
       confirmDiscard: (message) => {
         asked.push(message)
         return false
@@ -254,7 +286,7 @@ describe('the difficulty menu', () => {
     blank?.click()
     root.querySelector<HTMLElement>('.keypad__pad--digits [aria-label="Digit 4"]')?.click()
 
-    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+    difficultyButtons(root)[1]?.click()
 
     expect(asked).toHaveLength(1)
     expect(asked[0]).toContain('will be lost')
@@ -264,18 +296,14 @@ describe('the difficulty menu', () => {
     // Confirming something the player has not invested in is friction for its own
     // sake.
     const asked: string[] = []
-    const root = document.createElement('div')
-    document.body.replaceChildren(root)
-    mountApp(root, {
-      version: 'test',
-      client: { request: () => never() },
+    const root = mount({
       confirmDiscard: (message) => {
         asked.push(message)
         return false
       },
     })
 
-    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+    difficultyButtons(root)[1]?.click()
 
     expect(asked).toHaveLength(0)
   })
@@ -304,7 +332,7 @@ describe('the generating state', () => {
       },
     })
 
-    withCancel.querySelectorAll<HTMLElement>('.menu .button')[2]?.click()
+    difficultyButtons(withCancel)[2]?.click()
     withCancel.querySelector<HTMLElement>('.generating .button')?.click()
 
     expect(cancelled).toBe(true)
@@ -324,7 +352,7 @@ describe('the generating state', () => {
       },
     })
 
-    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+    difficultyButtons(root)[1]?.click()
 
     return Promise.resolve().then(() => {
       expect(root.querySelector('.status')?.textContent).toContain('Please try again')
@@ -333,3 +361,176 @@ describe('the generating state', () => {
     })
   })
 })
+
+describe('resuming', () => {
+  it('restores a board, its entries and its undo history', () => {
+    // The moment a player most needs undo is right after returning to a
+    // half-finished board. Plan section 8.6.
+    const storage = memoryStorage()
+    const first = mount({ storage })
+
+    const blank = [...first.querySelectorAll<HTMLElement>('[data-editable="true"]')][0]
+    const index = blank?.getAttribute('data-cell')
+    blank?.click()
+    first.querySelector<HTMLElement>('.keypad__pad--digits [aria-label="Digit 5"]')?.click()
+
+    const second = mount({ storage })
+
+    expect(second.querySelector(`[data-cell="${index}"]`)?.textContent).toBe('5')
+    expect((undoButton(second) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('falls back to the bundled board when nothing is stored', () => {
+    const root = mount()
+    expect(root.querySelector('.header__difficulty')?.textContent).toBe('Starter puzzle')
+  })
+})
+
+describe('the daily', () => {
+  it('is offered, and says when it rolls over', () => {
+    // UTC rollover means 01:00 local during British Summer Time. A known property
+    // rather than a bug report. Plan section 7.4.
+    const root = mount()
+    const daily = dailyButton(root)
+
+    expect(daily.textContent).toBe('Daily')
+    expect(daily.title).toContain('midnight UTC')
+  })
+
+  it('resumes today’s daily rather than regenerating it', () => {
+    // What makes a player's daily immune to a later generator change: once seen,
+    // that board is theirs. Plan section 5.7.
+    const storage = memoryStorage()
+    let requests = 0
+    const root = mount({
+      storage,
+      client: {
+        request: (seed, difficulty) => {
+          requests += 1
+          return {
+            puzzle: Promise.resolve({
+              ok: true as const,
+              puzzle: {
+                seed,
+                difficulty,
+                generatorVersion: 1,
+                grid: starterGrid(),
+                density: {
+                  digitsMasked: 3,
+                  digitsTotal: 7,
+                  digitRatio: 0.43,
+                  digitTarget: 0.4,
+                  operatorsMasked: 0,
+                  operatorsTotal: 3,
+                  operatorRatio: 0,
+                  operatorTarget: 0,
+                  uniquenessChecks: 3,
+                },
+                attempts: 1,
+              },
+            }),
+            cancel: () => {},
+          }
+        },
+      },
+    })
+
+    dailyButton(root).click()
+
+    return Promise.resolve()
+      .then(() => {
+        expect(requests).toBe(1)
+        expect(root.querySelector('.header__difficulty')?.textContent).toBe('Daily')
+        // Asking again resumes from the slot instead of generating.
+        dailyButton(root).click()
+        return Promise.resolve()
+      })
+      .then(() => {
+        expect(requests).toBe(1)
+      })
+  })
+})
+
+describe('completing a puzzle', () => {
+  it('records it in the statistics, once', () => {
+    const storage = memoryStorage()
+    const root = mount({ storage })
+
+    for (const [cell, value] of solution()) {
+      cellAt(root, cell).click()
+      keypadDigit(root, value).click()
+    }
+
+    expect(root.querySelector('.stats__daily')?.textContent).toContain('No daily puzzles')
+    const easyRow = root.querySelector('.stats__row')
+    expect(easyRow?.textContent).toContain('easy')
+    // One completion, and clearing then refilling a cell must not add another.
+    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
+
+    const [firstCell, firstValue] = solution()[0] ?? [0, 0]
+    cellAt(root, firstCell).click()
+    keypadDigit(root, (firstValue + 1) % 10).click()
+    keypadDigit(root, firstValue).click()
+
+    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
+  })
+
+  it('clears the slot, so a solved board is not resumed', () => {
+    const storage = memoryStorage()
+    const root = mount({ storage })
+    for (const [cell, value] of solution()) {
+      cellAt(root, cell).click()
+      keypadDigit(root, value).click()
+    }
+
+    const again = mount({ storage })
+    expect(again.querySelector('.header__difficulty')?.textContent).toBe('Starter puzzle')
+  })
+})
+
+describe('theme', () => {
+  it('applies and remembers a choice', () => {
+    const storage = memoryStorage()
+    const themeRoot = document.createElement('div')
+    const root = mount({ storage, themeRoot })
+
+    themeButton(root, 'Dark').click()
+    expect(themeRoot.getAttribute('data-theme')).toBe('dark')
+
+    const again = document.createElement('div')
+    mount({ storage, themeRoot: again })
+    expect(again.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('removes the attribute for system, rather than setting a value', () => {
+    // data-theme="system" matches no rule in tokens.css and would silently give
+    // the light palette on a device set to dark. Plan section 8.1.
+    const themeRoot = document.createElement('div')
+    const root = mount({ themeRoot })
+
+    themeButton(root, 'Dark').click()
+    themeButton(root, 'System').click()
+
+    expect(themeRoot.hasAttribute('data-theme')).toBe(false)
+  })
+})
+
+function dailyButton(root: HTMLElement): HTMLElement {
+  const button = [...root.querySelectorAll<HTMLElement>('.menu .button')].find(
+    (element) => element.textContent === 'Daily',
+  )
+  if (button === undefined) {
+    throw new Error('No daily button')
+  }
+  return button
+}
+
+function themeButton(root: HTMLElement, label: string): HTMLElement {
+  const button = [...root.querySelectorAll<HTMLElement>('.settings__themes .button')].find(
+    (element) => element.textContent === label,
+  )
+  if (button === undefined) {
+    throw new Error(`No theme button ${label}`)
+  }
+  return button
+}

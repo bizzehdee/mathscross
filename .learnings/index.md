@@ -60,6 +60,10 @@ true on one machine only. See
   does not remove the need for an upload key, the console hands back certificates
   rather than private keys, and the APK CI builds is not the one users get. Read
   before touching the signing secrets or testing a release build.
+- [production-csp-blocks-dev-hmr.md](production-csp-blocks-dev-hmr.md) — the shipped
+  `connect-src 'none'` blocks Vite's hot-update websocket, so changes silently never
+  apply in dev and a correct fix looks broken. Read before tightening the CSP, or when
+  a hot reload stops working for no visible reason.
 - [windows-git-bash-mangles-app-base.md](windows-git-bash-mangles-app-base.md) — Git
   Bash rewrites `APP_BASE=/mathscross/` into a Windows path, silently, with a zero
   exit code. Read before verifying the Pages base path locally, or before passing any

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:slow": "vitest run --config vitest.slow.config.ts",
-    "size": "node scripts/check-size.mjs"
+    "size": "node scripts/check-size.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "type": "module",
   "devDependencies": {

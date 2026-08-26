@@ -45,6 +45,9 @@ export function createMenuView(callbacks: MenuCallbacks): MenuView {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'button'
+    // Selectable without matching on label text, which the Daily button shares a
+    // container with.
+    button.setAttribute('data-difficulty', difficulty)
     button.textContent = LABELS[difficulty]
     button.title = DESCRIPTIONS[difficulty]
     button.setAttribute('aria-label', `New ${LABELS[difficulty]} puzzle: ${DESCRIPTIONS[difficulty]}`)
