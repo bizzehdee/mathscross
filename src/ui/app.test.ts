@@ -541,3 +541,91 @@ describe('the game screen header', () => {
     expect(root.querySelector('.header__difficulty')?.textContent).toBe('')
   })
 })
+
+describe('finishing a puzzle', () => {
+  it('congratulates the player and reports the time', async () => {
+    // Finishing is the moment the game exists for, and a line of status text is an
+    // anticlimax.
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+
+    const dialog = root.querySelector<HTMLElement>('.completion')
+    expect(dialog?.hidden).toBe(false)
+    expect(dialog?.getAttribute('role')).toBe('dialog')
+    expect(dialog?.getAttribute('aria-modal')).toBe('true')
+    expect(dialog?.textContent).toContain('Congratulations')
+    expect(dialog?.textContent).toContain('Solved in')
+  })
+
+  it('offers another of the same difficulty', async () => {
+    // Someone who has just finished a Medium wants another Medium, not a menu
+    // asking them to choose again.
+    const counter = { requests: 0 }
+    const root = mountReady({ client: starterClient(counter) })
+    button(root, 'Medium').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+
+    const another = button(root, 'Another Medium')
+    expect(another.getAttribute('aria-label')).toContain('another Medium')
+
+    another.click()
+    await Promise.resolve()
+
+    expect(counter.requests).toBe(2)
+    expect(visibleScreen(root)).toBe('game')
+    expect(root.querySelector<HTMLElement>('.completion')?.hidden).toBe(true)
+  })
+
+  it('offers a way back to the menu instead', async () => {
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+    button(root, 'Back to menu').click()
+
+    expect(visibleScreen(root)).toBe('home')
+    expect(root.querySelector<HTMLElement>('.completion')?.hidden).toBe(true)
+  })
+
+  it('reports the streak for a daily, and offers no another', async () => {
+    // There is one daily a day, so offering a second would promise what the game
+    // cannot give.
+    const root = mountReady({ client: starterClient() })
+    root.querySelector<HTMLElement>('[data-daily]')?.click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+
+    const dialog = root.querySelector<HTMLElement>('.completion')
+    expect(dialog?.hidden).toBe(false)
+    expect(dialog?.textContent).toContain('daily')
+    expect(
+      [...root.querySelectorAll<HTMLElement>('.completion__actions button')].filter(
+        (element) => !element.hidden,
+      ).length,
+    ).toBe(1)
+  })
+
+  it('does not appear for a board that is full but wrong', async () => {
+    // "Every cell filled" is not "solved". Congratulating a player for a wrong
+    // board would be worse than saying nothing.
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    // Fill every blank with a deliberately wrong digit.
+    for (const [cell, value] of solution()) {
+      cellAt(root, cell).click()
+      keypadDigit(root, (value + 1) % 10).click()
+    }
+
+    expect(root.querySelector<HTMLElement>('.completion')?.hidden).toBe(true)
+    expect(root.querySelector('.status')?.textContent).toContain('are wrong')
+  })
+})

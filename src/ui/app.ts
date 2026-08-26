@@ -39,6 +39,7 @@ import {
 } from '../game/state'
 import { bindTimerToVisibility, createTimer, type Timer } from '../game/timer'
 import { createBoardView, type BoardView } from './board/board'
+import { createCompletionView } from './completion/completion'
 import { createControlsView } from './controls/controls'
 import { createHomeView, type ResumeSummary } from './home/home'
 import { createKeypadView } from './keypad/keypad'
@@ -142,7 +143,19 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   gameScreen.className = 'screen screen--game'
   const layout = document.createElement('div')
   layout.className = 'layout'
-  gameScreen.append(layout)
+
+  const completion = createCompletionView({
+    onAnother: (difficulty) => {
+      completion.hide()
+      newPuzzle(difficulty)
+    },
+    onMenu: () => {
+      completion.hide()
+      leaveScreen()
+    },
+  })
+
+  gameScreen.append(layout, completion.element)
 
   const statsScreen = document.createElement('section')
   statsScreen.className = 'screen screen--stats'
@@ -232,6 +245,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
    * walking away and coming back is the same as never leaving.
    */
   function leaveScreen(): void {
+    completion.hide()
     if (!router.back()) {
       router.reset('home')
       showScreen('home')
@@ -313,6 +327,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     restored?: LoadedBoard,
   ): void {
     session?.dispose()
+    completion.hide()
 
     const state = createGameState(puzzle, difficulty)
     if (restored !== undefined) {
@@ -439,6 +454,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
         active.recorded = true
         timer.pause()
         recordSolve(active)
+        celebrate(active)
       }
     }
   }
@@ -452,6 +468,21 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     saveStats(stats, storage)
     statsView.render(stats)
     clearBoard(active.slot, storage)
+  }
+
+  /**
+   * Says so, and offers another.
+   *
+   * Finishing is the moment the game exists for, and a line of status text is an
+   * anticlimax. A daily gets the streak instead of an "another", because there is
+   * one a day and offering a second would promise what the game cannot give.
+   */
+  function celebrate(active: Session): void {
+    if (active.slot === 'daily') {
+      completion.showForDaily(active.timer.elapsed(), stats.daily.currentStreak)
+      return
+    }
+    completion.showForPuzzle(active.state.difficulty, active.timer.elapsed())
   }
 
   // ---- generation ------------------------------------------------------------

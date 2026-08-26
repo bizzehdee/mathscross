@@ -525,3 +525,50 @@ body {
   border-top: 1px solid var(--colour-line);
   padding-top: var(--space-3);
 }
+
+/* The completion dialog.
+
+   Overlays the finished board: the board stays visible behind it, because seeing
+   the puzzle you just solved is part of the moment. */
+
+.completion {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  /* No colour token: this is a scrim over whatever is behind, and it must darken
+     in both palettes rather than follow either. */
+  background: rgb(0 0 0 / 55%);
+  z-index: 10;
+}
+
+.completion__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(100%, 22rem);
+  padding: var(--space-4);
+  background: var(--colour-surface-raised);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.completion__title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.completion__detail {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--colour-ink-muted);
+}
+
+.completion__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

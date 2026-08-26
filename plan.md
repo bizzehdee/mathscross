@@ -1210,6 +1210,16 @@ Two details that are easy to get wrong:
 A first-time player lands on how to play rather than having a card appear over the
 menu, and can return to it from home at any time.
 
+**Finishing gets a dialog, not a status line.** Completing a puzzle is the moment the
+game exists for, and announcing it in the status region is an anticlimax. The dialog
+says so plainly, reports the time, and offers another puzzle **of the same
+difficulty** — someone who has just finished a Medium wants another Medium, not a
+menu asking them to choose again. It appears over the finished board rather than
+replacing it, because seeing the puzzle you just solved is part of the moment.
+
+A daily is the exception: there is one per day, so there is no "another" to offer.
+That case reports the streak instead, which is what a daily is for.
+
 ## 9. Cordova and Android
 
 ### 9.1 Cordova or Capacitor
