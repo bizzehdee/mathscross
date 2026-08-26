@@ -10,7 +10,18 @@ The game ships as a web app, installable as a PWA, and as an Android app. Both
 targets build from one TypeScript codebase through two Vite configurations. Android
 is wrapped with Apache Cordova. All builds and releases run through GitHub Actions.
 
-### 1.0 Names
+### 1.1 Purpose
+
+A hobby and portfolio project, paced alongside the Sudoku sibling. No revenue model:
+no ads, no in-app purchase, no paid tier, now or planned. No deadline.
+
+This frame decides trade-offs throughout. Reusing the sibling's pipeline outranks
+picking the best tool in isolation, because the pipeline is the part already paid
+for. Shipping a small complete game outranks shipping a large incomplete one, which
+is why the Kids tier is deferred in section 1.5. Where a decision could go either
+way, prefer the one with less to maintain.
+
+### 1.2 Names
 
 One name, two casings. The product name is `MathsCross`. Technical identifiers are
 the same word lowercased, because package identifiers, repository names, and URL
@@ -29,53 +40,64 @@ In user-facing text, write `MathsCross`: capital `M`, capital `C`, no space. Do 
 write `Mathscross`, `mathsCross`, or `Maths Cross`. The package identifier cannot be
 changed after the first Play upload; the display name can.
 
-### 1.1 Sibling project
+### 1.3 Sibling project
 
 `C:\code\sudoku` is an offline-first Sudoku PWA with the same shape: seeded runtime
 generation, a Cordova Android shell, GitHub Pages deployment, and Play publishing.
 Its pipeline is working and its constraints are measured.
 
 MathsCross must follow its conventions rather than invent new ones: the same folder
-layout, the same theme tokens, the same two-config Vite setup, the same three
-workflows, and the same native shell settings. Section 12 lists the entries in
-`C:\code\sudoku\.learnings\` that apply here and must be read before the work they
-govern.
+layout, the same theme tokens, the same two-config Vite setup, and the same native
+shell settings. Section 12 lists the entries in `C:\code\sudoku\.learnings\` that
+apply here and must be read before the work they govern.
 
-Deviating from a sibling convention is allowed only with a stated reason. Six
+Deviating from a sibling convention is allowed only with a stated reason. Eight
 deviations are already known and are recorded in section 11.
 
-### 1.2 Confirmed decisions
+### 1.4 Confirmed decisions
 
 | Decision | Choice |
 |---|---|
+| Purpose | Hobby and portfolio. No revenue, no deadline |
 | Frontend stack | TypeScript + Vite, no UI framework |
 | Puzzle delivery | Generated on device at runtime, in a Web Worker |
-| Release 1 scope | Offline single-player, plus a daily puzzle |
+| Release 1 modes | Free play at Easy, Medium, Hard, plus a daily |
 | Web distribution | GitHub Pages, installable as a PWA |
 | Native wrapper | Cordova (`cordova-android`). Confirmed against Capacitor, section 9.1 |
-| CI/CD | GitHub Actions: `ci.yml`, `pages.yml`, `release.yml` |
+| CI/CD | GitHub Actions: `ci.yml`, `pages.yml`, `release.yml`, `slow.yml` |
 | Persistence | `localStorage`, one JSON value per key, behind `persist.ts` |
+| In-progress slots | Two: one free play, one daily |
 | Cell contents | One digit (0 to 9) per cell |
 | Number bounds | A number is a maximal run of adjacent digit cells |
 | Negative sign | Unary minus, identified by cell position |
 | Degenerate equations | Illegal. Every equation must contain an operator |
-| Negative values | Off at Kids and Easy. On at Medium and Hard |
-| Audience | Both children and adults, via a Kids tier |
-| Daily puzzle | Difficulty rotates by day of week |
-| Theming | Sudoku's token set and four-theme model, reused |
+| Negative values | Off at Easy. On at Medium and Hard |
+| Audience | General adult puzzle players |
+| Daily puzzle | Difficulty rotates by UTC day of week. Seeded from the date alone |
 | Value ranges | Derived from equation length, not from the original specification |
-| Easy grid | Stays 5 x 5. Kids and Easy share a grid size |
+| Easy grid | 5 x 5, and the entry point for new players |
+| Undo | In scope. 200 moves, persisted |
+| Mistake counting | Out of scope. Not well defined for this mechanic |
+| Pencil marks | Out of scope for release 1 |
 | Package identifier | `com.bizzeh.mathscross`. Permanent once published |
 | Repository and Pages path | `mathscross`, so `APP_BASE` is `/mathscross/` |
 | Accent | Indigo. `#3a5fa8` light, `#8fb0f0` dark, `#ffd400` contrast |
-| Parental gate | None. Nothing in release 1 requires one |
+| Animation | Effectively none. One completion transition, reduced-motion gated |
+| Theming | Sudoku's token set and four-theme model, less `--colour-note` |
 
-### 1.3 Out of scope for release 1
+### 1.5 Out of scope for release 1
 
-Do not build any of the following in release 1:
+Deferred features are listed with their triggers in section 17. Do not build any of
+the following in release 1:
 
-- Tile Placement mode. It is a specified variant, deferred to release 2. Fill Mode
-  is the only mode in release 1.
+- The Kids tier. Cut because one digit per cell forced it to 5 x 5 single-digit,
+  leaving it near-identical to Easy. Section 17.
+- Tile Placement mode. A specified variant, not the primary mechanic.
+- Hints. `hint.ts` is not created until the feature is real.
+- Pencil marks, and the `--colour-note` token that exists only to serve them.
+- Save codes and puzzle sharing.
+- Mistake counting. A value is only wrong relative to an equation that may still be
+  incomplete, so "mistake" has no clean definition here.
 - Accounts, cloud sync, or any backend service.
 - Ads, in-app purchase, or store billing.
 - Analytics or crash reporting that transmits data off device.
@@ -83,23 +105,30 @@ Do not build any of the following in release 1:
   sibling.
 - Multiplayer or leaderboards.
 
-### 1.4 Success criteria for release 1
+### 1.6 Success criteria for release 1
 
-1. The web app is playable with no network connection after first load.
-2. The Android app requests no `INTERNET` permission.
-3. The main thread never blocks on generation. A generating state appears within
+1. The mechanic passed the M0.5 playtest in section 14.
+2. The web app is playable with no network connection after first load.
+3. The Android app requests no `INTERNET` permission.
+4. The first board on a fresh install appears with no wait, per section 5.8.
+5. The main thread never blocks on generation. A generating state appears within
    150 ms, reports progress, and can be cancelled.
-4. Generation succeeds within the attempt cap for at least 99% of seeds at every
+6. Generation succeeds within the attempt cap for at least 99% of seeds at every
    difficulty, measured over 100 seeds per difficulty in the slow suite.
-5. Every generated puzzle has exactly one solution.
-6. The daily puzzle for a given date is identical on every device and platform.
-7. `localStorage` survives an Android app restart and upgrade, verified on a device.
-8. A tap on a board cell or a keypad key registers with no perceptible delay,
-   verified on a device rather than in a desktop browser.
-9. The installed Android app is at or under the ceiling measured in section 8.4.
-10. Unit and slow tests pass in CI on every pull request.
+7. Achieved mask density is within 10 percentage points of target at every
+   difficulty, so the difficulty ladder does not collapse at the top.
+8. Every generated puzzle has exactly one solution.
+9. A player's completed and in-progress dailies survive a generator change.
+10. `localStorage` survives an Android app restart and upgrade, verified on a device.
+11. A tap on a board cell or a keypad key registers with no perceptible delay,
+    verified on a device rather than in a desktop browser.
+12. The board is navigable and comprehensible with a screen reader, and no state is
+    conveyed by colour alone.
+13. The installed Android app is at or under the ceiling measured in section 8.4.
+14. Unit and fast tests pass in CI on every pull request. The slow suite passes
+    nightly and on every tag.
 
-Criterion 3 and 4 replace a flat wall-clock budget. Section 5.6 explains why a
+Criteria 5 to 7 replace a flat wall-clock budget. Section 5.6 explains why a
 wall-clock target was the wrong shape.
 
 ## 2. Game specification
@@ -158,20 +187,28 @@ Two rules follow:
   four cells for that operand, not three.
 
 Because position alone decides the classification, the player never faces an
-ambiguous cell. This holds even at Hard, where every operator is masked.
+ambiguous cell. This holds even at Hard, where operators are masked.
 
-### 2.4 Equations
+### 2.4 Equations, and what makes a grid legal
 
 An **equation** is a maximal contiguous horizontal or vertical run of non-`block`
 cells that contains at least one `equals` cell. Runs are bounded by `block` cells or
 by the grid edge.
 
-These states are illegal and the generator must never produce them:
+Two legality rules, both stated carefully because an earlier draft got both wrong
+and between them made every 5 x 5 grid unbuildable:
 
-- A run of non-`block` cells containing no `equals` cell.
-- An isolated single non-`block` cell.
-- An equation containing no `operator` cell. A bare identity such as `6 = 6` gives
-  the player nothing to deduce.
+1. **Every non-`block` cell must belong to at least one equation.** A cell belonging
+   to no equation is illegal.
+2. **An equation must contain at least one `operator` cell.** A bare identity such
+   as `6 = 6` gives the player nothing to deduce.
+
+Rule 1 is deliberately *not* "a run of length one is illegal". A single cell forming
+a length-one run in one direction is legal whenever it belongs to an equation running
+the other way. This is ordinary crossword construction, and forbidding it would be
+fatal: at Easy every equation is exactly 5 cells, so in a 5 x 5 grid every equation
+is a complete row or column, and any such layout leaves length-one runs in the rows
+the columns pass through. Under the wrong reading, no Easy grid exists at all.
 
 ### 2.5 Evaluation rule
 
@@ -187,6 +224,9 @@ screen. Do not implement PEMDAS. Do not add parentheses.
 
 An equation is satisfied when each side of the `=` evaluates to the same value, with
 each side evaluated in reading order.
+
+This is the rule most likely to defeat a new player, because school teaches the
+opposite. Section 8.7 makes teaching it a release-1 requirement.
 
 ### 2.6 Value range is derived, not declared
 
@@ -212,11 +252,11 @@ specification. Equations are not lengthened to reach the original numbers, becau
 that would mean larger grids at every difficulty, which costs generation time and
 screen space for no gameplay gain.
 
-Two consequences follow from that decision:
+Two consequences follow:
 
-1. **Easy's stated range of 1 to 20 is unreachable.** Easy is 5 x 5 with equations
-   of 3 to 5 cells, so every operand and result is a single digit. Easy's real range
-   is 0 to 9.
+1. **Easy's stated range of 1 to 20 is unreachable.** Easy is 5 x 5 with 5-cell
+   equations, so every operand and result is a single digit. Easy's real range is
+   0 to 9.
 2. **Medium's stated maximum of 100 is unreachable.** Medium is 7 x 7 with equations
    of at most 7 cells, which caps a result at 99.
 
@@ -229,33 +269,35 @@ difference as a bug and "fix" it.
 Hold this table in one place, `src/engine/difficulty.ts`. Do not spread these values
 across the generator, the solver, and the UI.
 
-| Parameter | Kids | Easy | Medium | Hard |
-|---|---|---|---|---|
-| Grid dimensions | 5 x 5 | 5 x 5 | 7 x 7 | 9 x 9 |
-| Equation length | 5 cells | 5 cells | 5 to 7 cells | 5 to 9 cells |
-| Allowed operators | `+` `-` | `+` `-` | `+` `-` `*` | `+` `-` `*` `/` |
-| Derived value range | 0 to 9 | 0 to 9 | -99 to 99 | -999 to 999 |
-| Intersection count | 2 | 2 to 4 | 5 to 8 | 10 or more |
-| Division | not used | not used | integer results only | integer results only |
-| `allowNegative` | false | false | true | true |
-| Digit masking | 30% | 40% | 60% | 75% |
-| Operator masking | 0% | 0% | 30% | 100% |
-| Touch target | 56px | 44px | 44px | 44px |
+| Parameter | Easy | Medium | Hard |
+|---|---|---|---|
+| Grid dimensions | 5 x 5 | 7 x 7 | 9 x 9 |
+| Equation length | 5 cells | 5 to 7 cells | 5 to 9 cells |
+| Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` `/` |
+| Derived value range | 0 to 9 | -99 to 99 | -999 to 999 |
+| Intersection count | 2 to 4 | 5 to 8 | 10 or more |
+| Division | not used | integer results only | integer results only |
+| `allowNegative` | false | true | true |
+| Digit masking | 40% | 60% | 75% |
+| Operator masking | 0% | 30% | 100%, provisional |
 
 Notes on this table:
 
-- **Kids is 5 x 5, not 4 x 4.** A 4 x 4 grid cannot hold any equation. The shortest
-  legal equation is 5 cells, so no run in a 4 x 4 grid is long enough.
-- **Easy stays at 5 x 5.** Kids and Easy therefore differ only by masking density,
-  intersection count, and touch target size. The gap is narrow and accepted. If
-  play-testing at M4 shows the two tiers feel identical, widen the gap by lowering
-  Kids masking and raising Easy masking and intersection count, within the same grid
-  size. Do not move Easy to 7 x 7: that would leave Medium and Easy on adjacent grid
-  sizes and compress the top of the ladder.
-- At Hard, every operator is masked and 75% of digits are masked, so the player
-  solves structure and arithmetic together. This is the intended design and is also
-  the dominant driver of generation cost. Section 5.6 covers the consequence.
-- The touch target row feeds `--tap-min`, per section 8.2.
+- **Easy is the entry point.** With the Kids tier deferred, Easy carries the job of
+  teaching the game. Its parameters are unchanged and are already gentle: single
+  digits, `+` and `-` only, and no masked operators. What Easy gains instead is the
+  onboarding requirement in section 8.7.
+- **Hard's 100% operator masking is a hypothesis, not a specification.** It is
+  untested against two independent risks. Enjoyment: with every operator unknown, a
+  player solves structure and arithmetic simultaneously across a 9 x 9 with ten or
+  more intersections, which may be past the point of fun. Generator behaviour:
+  uniqueness may be unreachable at that density, so the restore-on-failure loop in
+  section 5.4 would claw cells back until achieved masking lands far below target —
+  silently turning Hard into Medium and collapsing the top of the ladder. M0.5
+  tests the first risk by hand; section 13.4 asserts against the second. Expect to
+  settle nearer 60 to 70%.
+- `--tap-min` is 44 px at every difficulty. The enlarged target existed only for the
+  Kids tier.
 
 ### 2.8 Reference board
 
@@ -282,10 +324,12 @@ columns  1 + 2 = 3      2 + 1 = 3      3 + 3 = 6
 ```
 
 This board is a parsing and evaluation fixture, not a difficulty-conformant puzzle.
-Its nine intersections exceed the Easy range on purpose. Put it in
-`src/engine/test-fixtures.ts`, matching the sibling's convention, and assert the
-engine extracts the same six equations a human reads from it. This is the first test
-written in M1.
+Its nine intersections exceed the Easy range on purpose. Note also that rows 0 and 2
+are separated by a row containing two operator cells, not blocks — which is legal
+under section 5.1's spacing rule and would not have been under an earlier draft of
+it. Put the board in `src/engine/test-fixtures.ts`, matching the sibling's
+convention, and assert the engine extracts the same six equations a human reads from
+it. This is the first test written in M1.
 
 ## 3. Repository layout
 
@@ -298,20 +342,28 @@ in the same places.
   plan.md
   README.md
   AGENTS.md
-  .learnings/                 # this project's own learnings
-  standards/                  # copied from the sibling
-  docs/
-  store/                      # store listing copy and screenshots
+  .learnings/
+  standards/
+  store/                      # Play listing. Uploaded by hand, ships in nothing
+    listing.md                # name, descriptions, Data Safety answers
+    README.md                 # how to regenerate and how to capture
+    icon-512.png              # copied from public/icons/, never redrawn
+    feature-graphic-1024x500.png
+    screenshots/
   scripts/
     generate-icons.mjs
     generate-store-assets.mjs
-  public/                     # static assets, copied verbatim
+    png.mjs                   # zero-dependency PNG encoder, from the sibling
+    pixel-font.mjs            # 5x7 bitmap font, throws on unknown characters
+  public/
+    icon.svg                  # single source for all generated icons
+    privacy.html              # policy URL Play requires, served from Pages
   src/
     index.html                # Vite root is src/, per the sibling
     main.ts
     vite-env.d.ts
     styles/
-      tokens.css              # copied from the sibling, accent changed
+      tokens.css              # from the sibling: accent changed, note removed
       layout.css
     engine/                   # pure. No DOM, no platform calls, no clock
       types.ts
@@ -326,28 +378,28 @@ in the same places.
       mask.ts                 # phase 4: cell masking
       generate.ts             # orchestrates phases 1 to 4
       generate.worker.ts      # worker entry point
+      starter.ts              # the bundled first-launch puzzle, section 5.8
       generate.test.ts
-      generate.slow.test.ts   # 100 seeds per difficulty, own vitest config
+      generate.slow.test.ts   # own vitest config, own workflow
       test-fixtures.ts
     game/                     # in-progress game state, main thread
       generate-client.ts      # owns the worker, draws seeds, returns promises
-      state.ts
+      state.ts                # board state, undo and redo history
       validate.ts
-      persist.ts
+      persist.ts              # the only module that touches storage
       timer.ts
-      hint.ts                 # deferred past release 1, file reserved
     features/
       daily/                  # date -> seed, difficulty rotation, streak
       settings/
       stats/
       theme/                  # applyTheme, effectiveTheme, THEME_LABELS
-      savecode/               # deferred past release 1
     ui/
       app.ts
       platform.ts             # native detection, service worker gating
       board/
       keypad/                 # numeric pad and operator pad
-      controls/
+      controls/               # undo, redo, timer display
+      onboarding/             # first-run explainer, section 8.7
       menu/
       install/
       haptics.ts
@@ -361,6 +413,7 @@ in the same places.
       ci.yml
       pages.yml
       release.yml
+      slow.yml
   vite.config.ts              # exports createConfig(target), default 'web'
   vite.cordova.config.ts      # createConfig('native')
   vitest.config.ts
@@ -380,6 +433,11 @@ Rules for this layout:
 - A feature folder must not import another feature folder's internals.
 - Do not create a module that only forwards a call to the next module.
 - Tests sit beside the code they test, as `*.test.ts`, per the sibling.
+- **No folder or file is created for a deferred feature.** There is no `hint.ts` and
+  no `savecode/` until those features are in scope. An empty folder reserved for a
+  deferred feature is an invitation to fill it. Section 17 holds the list instead.
+- There is no `docs/`. `plan.md` holds the design and `.learnings/` holds hard-won
+  facts. A third documentation home only splits the audience.
 
 ### 3.1 Toolchain
 
@@ -394,6 +452,13 @@ Match the sibling's versions so the two repositories can share fixes:
 Use a second Vitest config for the slow suite rather than an environment variable.
 The reason is recorded in the sibling's `windows-npm-script-env-vars.md`: npm runs
 scripts through `cmd.exe` on Windows, where `VAR=1 vitest` is a parse error.
+
+### 3.2 README
+
+Short and practical. What MathsCross is, the left-to-right evaluation rule stated
+plainly, how to run the dev server, how to build both targets, how to run the fast
+and the slow suites, and a pointer to `plan.md` as the design authority. Nothing
+else: the plan is not duplicated into the README.
 
 ## 4. Build targets
 
@@ -439,8 +504,13 @@ thread.
 3. Recursively branch vertical and horizontal segments off existing cells, subject
    to these constraints:
    - Each segment length must fall in the difficulty's equation-length range.
-   - Parallel adjacent equations are forbidden. Leave at least one `block` cell
-     between two parallel equations.
+   - **Two parallel equations must not occupy adjacent rows or columns.** They must
+     be separated by at least one intervening row or column. That intervening line
+     is not required to be all `block` cells — it normally carries the operator and
+     `equals` cells of the perpendicular equations, as it does in section 2.8. An
+     earlier draft demanded block spacing and thereby outlawed the plan's own
+     reference board.
+   - Every non-`block` cell must belong to at least one equation, per section 2.4.
    - The graph of connected equations must form a single connected component.
    - The intersection count must fall in the difficulty's range.
 4. Stop when the intersection count is met and no further segment can be placed.
@@ -491,6 +561,8 @@ reach uniqueness.
 3. After each mask, re-run the uniqueness check. If uniqueness is lost, restore that
    cell and continue with the next candidate.
 4. Stop when the targets are met or the candidate list is exhausted.
+5. Report achieved mask density alongside the puzzle, so section 13.4 can assert on
+   it and a collapsing ladder fails a test instead of shipping.
 
 Masking a `digit` cell that holds the leading digit of a multi-cell number is legal.
 The no-leading-zero rule in section 2.2 then becomes a solver constraint on that
@@ -498,17 +570,14 @@ cell, pruning its domain to 1 to 9.
 
 Masking percentages are targets, not guarantees. A puzzle reaching 70% digit masking
 at Hard instead of 75% is acceptable. A puzzle with two solutions is not. Uniqueness
-always wins.
-
-Note the sibling's finding in `generation-measurements.md`: its hole-digging stopped
-at the floor of its target range, so clue counts carried no variety. Expect the same
-here, and treat the masking percentage as a floor rather than a target if variety
-turns out to matter.
+always wins. What is *not* acceptable is silent collapse: if achieved density falls
+more than 10 percentage points below target, the difficulty is no longer the
+difficulty it claims to be, and section 13.4 fails.
 
 ### 5.5 Determinism
 
-Determinism is a hard requirement, because the daily puzzle must match across
-devices with no server to arbitrate.
+Determinism matters for one reason: the daily puzzle is derived from a date, so the
+same date must produce the same puzzle for as long as the generator is unchanged.
 
 - Implement the PRNG in `src/engine/rng.ts`. Use `sfc32` or `xoshiro128**`.
 - Never call `Math.random()` anywhere in `src/engine/`.
@@ -524,11 +593,15 @@ devices with no server to arbitrate.
   games would get adjacent seeds, and a session's seeds would be guessable from its
   start time.
 
+Keep a single `GENERATOR_VERSION` constant, as the sibling does. It has no job in
+release 1. It exists for save codes in release 2, where a shared code must decode to
+the same puzzle. Section 5.7 explains why there is no separate frozen version for
+dailies.
+
 ### 5.6 Cost model and the attempt cap
 
-An earlier draft of this plan set a 300 ms wall-clock budget at the 95th percentile.
-The sibling's measurements show that is the wrong shape, and the number is not
-achievable.
+An earlier draft set a 300 ms wall-clock budget at the 95th percentile. The sibling's
+measurements show that is the wrong shape, and the number is not achievable.
 
 What the sibling measured, in `generation-measurements.md`:
 
@@ -557,8 +630,8 @@ The design that follows:
    not as a crash.
 3. **The UI shows a generating state after 150 ms**, with progress and a cancel
    control. A player must never face a frozen screen.
-4. **Measure before tuning.** M2 runs `test:slow` over 100 seeds per difficulty and
-   records median and worst attempts, median and worst milliseconds, and achieved
+4. **Measure before tuning.** M2 runs the slow suite over 100 seeds per difficulty
+   and records median and worst attempts, median and worst milliseconds, and achieved
    mask density per difficulty into `.learnings/generation-measurements.md`. Set the
    cap from that table, not from a guess.
 5. If a difficulty's median exceeds 1000 ms after measurement, widen its acceptance
@@ -570,16 +643,15 @@ it is needed: cache verified skeletal meshes, including operand widths, and run 
 phases 2 to 4 at runtime. This removes the most expensive search while keeping
 generation on device and puzzles effectively unlimited.
 
-### 5.7 Daily puzzle seeding and rotation
+### 5.7 The daily puzzle
 
-The daily seed derives from the UTC date and a frozen generator version:
+The seed derives from the UTC date alone:
 
 ```
-seed = hash(`${utcDateISO}:${DAILY_GENERATOR_VERSION}`)
+seed = hash(dateKey)          dateKey is YYYYMMDD in UTC
 ```
 
-Difficulty rotates by day of week, derived from the date so it needs no network and
-matches on every device:
+Difficulty rotates by UTC weekday:
 
 | Day | Difficulty |
 |---|---|
@@ -591,27 +663,56 @@ matches on every device:
 | Saturday | Hard |
 | Sunday | Hard |
 
-The Kids tier is excluded from the rotation. Kids puzzles are available in free play
-only.
+Adjacent dates must not produce adjacent seeds, or consecutive days would give
+visibly similar puzzles. Use an avalanche step, as the sibling's `dailySeed` does.
 
-`DAILY_GENERATOR_VERSION` is a constant in `src/features/daily/`. Any change to
-generation logic that alters output must be handled as follows:
+**There is no `DAILY_GENERATOR_VERSION`.** An earlier draft froze a generator version
+into the daily seed forever, so that a given date produced the same puzzle across
+every device for all time. That mechanism is deleted, for three reasons:
 
-- Bump `GENERATOR_VERSION` for free play. Free play has no cross-device parity
-  requirement.
-- Leave `DAILY_GENERATOR_VERSION` unchanged, or accept that every past daily
-  changes. Changing it is a deliberate release decision and must be recorded in
-  `.learnings/`.
+1. It made generator bugs unfixable. Any change to generation logic would either
+   alter every past daily or require maintaining two generators indefinitely.
+2. The parity it bought is unobservable. There are no accounts and no sync, so two
+   devices belonging to the same player never share a streak regardless. The only
+   thing cross-device parity buys is two *different people* comparing the same date's
+   puzzle, and release 1 has no sharing, no leaderboards, and no social features.
+3. The sibling does not do it. Its daily seed is derived from the date key alone, and
+   it carries a single `GENERATOR_VERSION` used only for save codes.
 
-This constraint follows from choosing runtime generation over bundled packs. Record
-it in `.learnings/` during M2 so it is not rediscovered during a later refactor.
+What protects the player instead:
+
+- **The daily puzzle is persisted into its own slot on first open.** Once a player
+  has seen a daily, that exact board is theirs, immune to any later generator change.
+- **Completed dailies are recorded by date key, not by puzzle content.** A streak is
+  a set of dates. No generator change can touch it.
+- A generator change therefore alters only dailies that no player has opened yet.
+  That cost is bounded, invisible, and worth paying for the ability to fix bugs.
+
+### 5.8 First launch and pre-generation
+
+On a fresh install there is no cached puzzle, so without care the first thing a new
+player experiences is a wait of unknown length, at exactly the moment they decide
+whether to keep the app.
+
+Two mitigations, both cheap:
+
+1. **Bundle one pre-verified Easy puzzle** in `src/engine/starter.ts`. It is the
+   first board a new player sees, and it appears instantly. Generate it once at M2
+   and paste it in; it is data, not code.
+2. **Pre-generate the next puzzle in the background** while the player works on the
+   current one. Every start after the first is then instant too. Cancel the pending
+   request if the player changes difficulty.
+
+Together these mean a player should never watch a spinner. The generating state from
+section 5.6 remains, because it is still needed when pre-generation has not finished
+or has been cancelled.
 
 ## 6. Solver
 
 ### 6.1 Callers
 
-The solver serves three callers: the phase 2 fill, the phase 3 and 4 uniqueness
-checks, and the hint feature, which is deferred past release 1.
+The solver serves two callers in release 1: the phase 2 fill, and the phase 3 and 4
+uniqueness checks. A third caller, hints, is deferred to release 2.
 
 ### 6.2 Approach
 
@@ -644,9 +745,10 @@ Record which techniques the solver needed:
 - `domain` — a cell was fixed by intersecting the domains of two crossing equations.
 - `search` — backtracking was required.
 
-Use the log for two purposes. First, to confirm a generated puzzle is solvable by
-deduction rather than only by brute force. Second, as an input to a future hint
-feature. The log is not the difficulty grade. The table in section 2.7 sets that.
+Use the log to confirm a generated puzzle is solvable by deduction rather than only
+by brute force. The log is not the difficulty grade. The table in section 2.7 sets
+that. It is also the input a release-2 hint feature would need, which is a reason to
+record it now and not a reason to build hints now.
 
 ## 7. Persistence
 
@@ -654,15 +756,23 @@ feature. The log is not the difficulty grade. The table in section 2.7 sets that
 
 - Define a storage interface in `src/game/persist.ts`, following the sibling's
   `game/persist.ts`.
-- Persist the current puzzle state, per-puzzle completion records, the daily streak,
-  and settings. Persist nothing else.
+- **Two in-progress slots**, not one: `mathscross.game.v1` for free play, and
+  `mathscross.daily.v1` for the daily. Starting a free-play puzzle must never touch
+  the daily slot. The sibling keeps a single slot, which is defensible for Sudoku but
+  wrong here: a daily is date-bound, so silently destroying a half-finished daily
+  loses it permanently and breaks a streak through no fault of the player.
+- Within free play there is one slot. Starting a new puzzle prompts before discarding
+  an in-progress one.
+- Each slot holds the mesh, the givens, the player's entries, the elapsed time, and
+  the undo history per section 8.6.
+- Also persist: settings, stats per section 7.3, and the set of completed daily date
+  keys.
 - **Do not persist the solution.** The sibling's `solution-concealment.md` records
   that a solution cannot be hidden from a determined client-side reader, because it
   follows from the visible givens. What is achievable is keeping it out of storage,
-  so a casual inspection does not hand it over. Store the mesh, the givens, and the
-  player's entries; recompute the solution when a hint or a check needs it.
+  so a casual inspection does not hand it over. Recompute it when a check needs it.
 - Do not persist personal data. Do not persist anything identifying a device or a
-  person. This matters more given a child audience: collect nothing.
+  person.
 
 ### 7.2 Which storage API
 
@@ -670,14 +780,13 @@ feature. The log is not the difficulty grade. The table in section 2.7 sets that
 below matters because the obvious upgrade does not fix the problem it appears to
 fix.
 
-**The premise to correct.** A common claim is that iOS WebViews clear
-`localStorage` under memory pressure, and that IndexedDB avoids it. The documented
-mechanism is different, and IndexedDB does not avoid it. On iOS, Intelligent
-Tracking Prevention deletes **all script-writable storage** after 7 days without
-site interaction. That bucket includes IndexedDB, Cache API, and service worker
-registrations alongside `localStorage`. Moving to IndexedDB, with or without
-`localForage`, changes nothing about eviction. See the sibling's
-`ios-storage-eviction.md`.
+**The premise to correct.** A common claim is that iOS WebViews clear `localStorage`
+under memory pressure, and that IndexedDB avoids it. The documented mechanism is
+different, and IndexedDB does not avoid it. On iOS, Intelligent Tracking Prevention
+deletes **all script-writable storage** after 7 days without site interaction. That
+bucket includes IndexedDB, Cache API, and service worker registrations alongside
+`localStorage`. Moving to IndexedDB, with or without `localForage`, changes nothing
+about eviction. See the sibling's `ios-storage-eviction.md`.
 
 What each option actually buys:
 
@@ -687,23 +796,23 @@ What each option actually buys:
 | IndexedDB, via `localForage` | Large quota, structured values, transactional writes | iOS 7-day eviction. Adds a dependency |
 | Cordova SQLite plugin | Durability: a native file outside the WebView storage bucket, so eviction cannot reach it | Nothing, but it is native code and a supply-chain surface, and it does not exist on the web target |
 
-**The decision.** MathsCross state is small: a mesh, a given set, a player entry set,
-a streak counter, and a settings object. That fits `localStorage` with room to
-spare, and the Android shell's `https://localhost` origin from section 9.2 makes it
-durable there. Release 1 ships no iOS native build, so the eviction risk applies
-only to web players on iOS who have not installed to the home screen, and
-home-screen installs are exempt.
+**The decision.** MathsCross state is small: two boards, two undo histories capped at
+200 moves, a stats object, a settings object, and a set of date keys. That fits
+`localStorage` with room to spare, and the Android shell's `https://localhost` origin
+from section 9.2 makes it durable there. Release 1 ships no iOS native build, so the
+eviction risk applies only to web players on iOS who have not installed to the home
+screen, and home-screen installs are exempt.
 
 **The atomicity weakness is real and must be handled.** `localStorage` has no
 transaction, so a multi-key write can tear if the app is killed mid-write, leaving
 inconsistent state. Handle it without changing API:
 
-- Write each domain object as one key holding one JSON value. Never spread one
-  object across several keys.
-- Write the in-progress puzzle under a single key, so a torn write loses the puzzle
-  rather than corrupting the stats.
-- Every read must tolerate missing or corrupt data and return a default. Treat a
-  read failure as an expected failure and return a value; do not throw. A `JSON.parse`
+- Write each domain object as one key holding one JSON value. Never spread one object
+  across several keys.
+- Keep the two board slots under separate keys, so a torn write loses one board
+  rather than corrupting the other or the stats.
+- Every read must tolerate missing or corrupt data and return a default. Treat a read
+  failure as an expected failure and return a value; do not throw. A `JSON.parse`
   failure is a normal case here, not an exception.
 - Version every stored shape with a `v` field, so a later format change can migrate
   or discard rather than misread.
@@ -712,13 +821,44 @@ inconsistent state. Handle it without changing API:
 
 1. An iOS native build is added. Then durability needs a native file, so use the
    SQLite plugin or `cordova-plugin-file` — not IndexedDB, which evicts identically.
-2. Stored state approaches 2 MB, half the practical quota. Then use IndexedDB for
-   capacity.
+2. Stored state approaches 2 MB, half the practical quota. The undo histories are the
+   only part that grows, which is why section 8.6 caps them.
 3. Statistics grow into a per-puzzle history worth querying rather than a set of
-   counters. Then use IndexedDB for structured access.
+   counters.
 
 Because `persist.ts` is the only module that touches the storage API, any of these
 changes is confined to one file. Do not scatter storage calls through features.
+
+### 7.3 Stats
+
+Record only completions. Nothing tracks attempts or abandonment, which avoids ever
+having to define "abandoned" and keeps the stored shape small.
+
+Per difficulty: completed count, best time, median time.
+
+For the daily: current streak, longest streak, total dailies completed.
+
+Use the **median**, not the mean, so one pathological session does not distort the
+figure. Store the whole object as one JSON value under one key.
+
+**The timer must pause when the app is not in front.** Pause on `visibilitychange`
+and on the Cordova pause event, and resume on the corresponding resume. Without this,
+a puzzle resumed across three sittings reports a nine-hour best time and every
+time-based stat becomes worthless.
+
+### 7.4 Daily and streak semantics
+
+- The daily slot holds **today only**. On opening the app on a new UTC date, an
+  unfinished previous daily is discarded.
+- Tell the player it expired. Do not let a half-finished board vanish silently.
+- The current streak increments only when today's daily is completed on today's UTC
+  date. A missed day resets it to zero. There is no catch-up and no backfill.
+- A daily that can be finished whenever is not a daily, and a queue of half-done
+  boards nags rather than motivates. This is the reason for the rule above.
+- Dates are UTC, matching the sibling, so that two players in different time zones
+  get the same puzzle on the same date. Document the consequence: during British
+  Summer Time the daily rolls over at 01:00 local, not midnight. Written down it is a
+  known property; undocumented it is a bug report.
 
 ## 8. UI, input and theming
 
@@ -733,8 +873,10 @@ Copy `src/features/theme/theme.ts` behaviour exactly, including the detail that
 `system` removes the attribute rather than setting `data-theme="system"`. Setting a
 `system` value matches no rule and silently yields the light palette.
 
-Change one token. MathsCross must not look like the same app as Sudoku on a home
-screen or in a task switcher, so the accent differs:
+Three changes from the sibling's file:
+
+**Change the accent.** MathsCross must not look like the same app as Sudoku on a home
+screen or in a task switcher.
 
 | Token | Sudoku | MathsCross |
 |---|---|---|
@@ -742,36 +884,31 @@ screen or in a task switcher, so the accent differs:
 | `--colour-accent` dark | `#6fbf95` | `#8fb0f0` |
 | `--colour-accent` contrast | `#ffd400` | `#ffd400` (unchanged) |
 
-Keep the contrast theme's accent unchanged. It is chosen for contrast, not for
-brand, and the sibling's comment records that raising contrast is not the same as
-inverting a palette.
+Keep the contrast theme's accent unchanged. It is chosen for contrast, not for brand,
+and the sibling's comment records that raising contrast is not the same as inverting
+a palette. Verify the new accent against `--colour-surface-raised` in all three
+palettes and record the measured ratio in a comment, matching how the sibling
+documents `--colour-note` at 7.51:1.
 
-Every surface, ink, and line token stays identical. Verify the new accent against
-`--colour-surface-raised` in all three palettes and record the measured ratio in a
-comment, matching how the sibling documents `--colour-note` at 7.51:1.
+**Delete `--colour-note`.** It exists solely for pencil marks, which are deferred to
+release 2. Do not ship an unused token; add it back with the feature.
 
-MathsCross needs one token the sibling does not: a grouping colour for multi-cell
-numbers, per section 8.5. Add `--colour-group` beside `--colour-note` and define it
-in all three palettes.
+**Add `--colour-group`.** A grouping colour for multi-cell numbers, per section 8.5.
+Define it in all three palettes.
 
 ### 8.2 Layout
 
 Follow `src/styles/layout.css` from the sibling:
 
-- Pad `#app` on all four edges with `env(safe-area-inset-*)`, not just the bottom.
-  An app targeting SDK 35 or above is drawn edge to edge on Android 15 whether it
-  asks to be or not, and in landscape the large inset is the left or right one.
+- Pad `#app` on all four edges with `env(safe-area-inset-*)`, not just the bottom. An
+  app targeting SDK 35 or above is drawn edge to edge on Android 15 whether it asks
+  to be or not, and in landscape the large inset is the left or right one.
 - Use aspect ratio, not width, as the single layout trigger. A landscape phone at
   844 x 390 is narrow and short, so a width rule would give it the stacked layout,
   which cannot fit a header, a square board, controls, and a keypad in 390 px of
   height.
-- Size all controls from `--tap-min`.
+- Size all controls from `--tap-min`, which is 44 px everywhere.
 - Give `:focus-visible` a 3 px accent outline.
-
-MathsCross deviates on one point. `--tap-min` is 44 px in the sibling and here, except
-at the Kids tier, where section 2.7 sets 56 px. Set it by a `data-tier="kids"`
-attribute that redefines the token, rather than by overriding individual control
-sizes.
 
 ### 8.3 Touch response inside the WebView
 
@@ -782,9 +919,9 @@ a viewport setting covers it.
 
 - Set `touch-action: manipulation` on every interactive element: board cells, keypad
   keys, and `.button`. It disables double-tap zoom on that element while leaving
-  scrolling and pinch-zoom on the page intact. Prefer it over
-  `user-scalable=no` in the viewport meta, which disables pinch-zoom for everyone and
-  is an accessibility regression.
+  scrolling and pinch-zoom on the page intact. Prefer it over `user-scalable=no` in
+  the viewport meta, which disables pinch-zoom for everyone and is an accessibility
+  regression.
 - Set `-webkit-tap-highlight-color: transparent` on interactive elements, and provide
   the pressed state with an explicit `:active` rule using `--colour-accent`. The
   default grey flash is a WebView artefact and reads as a rendering fault.
@@ -798,8 +935,14 @@ a viewport setting covers it.
 - Reuse the sibling's `ui/haptics.ts`. A short vibration on entry and on completion
   does more for perceived responsiveness than any visual change.
 
-Verify touch feel on a device, not in a desktop browser with touch emulation. The
-tap delay does not reproduce there.
+Verify touch feel on a device, not in a desktop browser with touch emulation. The tap
+delay does not reproduce there.
+
+**Animation.** Effectively none, which is consistent with a minimalist design and
+with the paragraph above. No transition on cell entry: it would fight fast typing and
+reintroduce latency exactly where the rules above remove it. One completion
+transition, 200 ms or less, and gate that single transition on
+`prefers-reduced-motion: reduce`. Haptics carry the rest of the feedback.
 
 ### 8.4 Bundle size
 
@@ -819,12 +962,13 @@ Notes on the ceilings:
 - The JS and CSS figures are budgets for code this project writes, and they are
   generous for it. Measure at M3 and tighten them to the measured size plus headroom,
   rather than leaving slack that silently absorbs a bad dependency.
+- The bundled starter puzzle from section 5.8 counts against the JS figure. It is one
+  Easy board, so the cost is tens of bytes, not kilobytes.
 - The installed-app figure is dominated by the native shell and the WebView glue, not
   by the web bundle, so shrinking JS by 20 KB will not move it. Measure the AAB at M6
   and set the real ceiling from that, then hold it.
 - Runtime generation is what keeps the app small. Bundled puzzle packs would have
-  added megabytes; this design ships an algorithm instead. That is a size argument in
-  favour of the choice already made in section 1.2.
+  added megabytes; this design ships an algorithm and one starter board instead.
 - Add a size check to `ci.yml` after M3: fail the build if a gzipped output exceeds
   its ceiling. A budget with no gate is a comment.
 
@@ -845,9 +989,9 @@ of that. Any future dependency must state its gzipped cost in the pull request.
   player cannot tell `1 5` from two separate operands. Grouping is derived from the
   mesh, so the cue is always correct.
 - Mark each equation as satisfied, unsatisfied, or incomplete as the player types.
-  Per-equation feedback comes from section 2.4.
+  **This must not be conveyed by colour alone**, per section 8.8.
 
-### 8.6 Input
+### 8.6 Input, undo and the timer
 
 - Provide two entry pads, because masked cells are of two kinds:
   - A numeric pad, `0` to `9`, for masked `digit` cells.
@@ -860,7 +1004,52 @@ of that. Any future dependency must state its gzipped cost in the pull request.
   values, backspace clears.
 - Support the Android hardware back button. Back must leave the puzzle and return to
   the previous screen, and must exit the app only from the home screen.
-- Reuse the sibling's `ui/haptics.ts` for entry and completion feedback.
+
+**Undo and redo are release-1 features.** They matter more here than in Sudoku: a
+Hard board has 75% of digits and every operator blank, so a player can enter dozens
+of values before discovering a contradiction, and sessions routinely span sittings.
+
+- One undoable action is one cell entry or clear. Never batch.
+- Cap the history at 200 moves. That is comfortably more than any 9 x 9 needs and it
+  bounds the stored payload against the threshold in section 7.2.
+- **Persist the history with the puzzle**, so undo survives a resume. The moment a
+  player most needs undo is immediately after returning to a half-finished board.
+- A new move after an undo truncates the redo branch, as the sibling's `state.ts`
+  does.
+
+**The timer** runs while the puzzle is in front, is displayed, and feeds stats. There
+is no penalty and no time limit. Pausing rules are in section 7.3.
+
+### 8.7 Onboarding
+
+Every player arrives expecting operator precedence, because that is what school
+taught. A player who assumes PEMDAS will enter correct-looking answers, watch them be
+rejected, and reasonably conclude the game is broken. Nothing else in the plan
+addresses this, and with the Kids tier deferred, Easy carries the teaching job alone.
+
+- Show a first-run explainer once: one dismissable card stating the left-to-right
+  rule with the `5 + 3 * 2 = 16` example from section 2.5.
+- Keep a permanent link to the same card in the menu, so it can be re-read.
+- Record dismissal in settings, not in the board slot.
+
+This is the highest-value small addition in the plan. Build it at M3, not at M7.
+
+### 8.8 Accessibility
+
+Pulled forward into M3. Retrofitting a grid widget at M7 costs several times what
+building it correctly costs while the board is being written.
+
+- Use `role="grid"` with rows of `gridcell`s and exactly one tab stop, following the
+  sibling's `board.ts`.
+- A bare digit announcement is meaningless here, because numbers span cells. Each
+  cell's `aria-label` must name the digit, its position within its number, and the
+  equations the cell belongs to.
+- Add a live status region announcing equation state changes, so a screen reader user
+  learns that an equation became satisfied without polling the grid.
+- **No state may be conveyed by colour alone.** Equation state carries a second
+  channel: a glyph, or an underline weight, alongside the hue. Red and green is
+  exactly the encoding that fails most often, and this is a three-state distinction.
+- Verify the contrast theme covers the accent change from section 8.1.
 
 ## 9. Cordova and Android
 
@@ -871,17 +1060,17 @@ reopen this without one of the four triggers at the end of this section. The
 comparison is recorded because a decision to keep the older tool is worth less than
 nothing if the reasoning behind it is lost.
 
-The friction with Cordova is real and is exactly where it is described: keeping the
-native wrapper aligned with current Play Store target API levels, Gradle toolchains,
-and splash screen APIs. Capacitor uses the same web stack and would be the default
-choice for a new project with no existing native pipeline.
+The friction with Cordova is real: keeping the native wrapper aligned with current
+Play Store target API levels, Gradle toolchains, and splash screen APIs. Capacitor
+uses the same web stack and would be the default choice for a new project with no
+existing native pipeline.
 
-**Why Capacitor is the better tool.** Five reasons, in descending order of weight
-for a project of this shape:
+**Why Capacitor is the better tool.** Five reasons, in descending order of weight for
+a project of this shape:
 
 1. **The native project is source, not build output.** Cordova regenerates
-   `platforms/android` from `config.xml`, so that directory is disposable and must
-   not be edited. Every native change has to be expressed indirectly: a `<preference>`,
+   `platforms/android` from `config.xml`, so that directory is disposable and must not
+   be edited. Every native change has to be expressed indirectly: a `<preference>`,
    an `<edit-config>`, a plugin, or a build hook. Capacitor commits `android/` as
    ordinary source, opened and edited directly in Android Studio. When a Play
    requirement needs a manifest attribute or a Gradle setting, the fix is to edit the
@@ -901,16 +1090,15 @@ for a project of this shape:
 4. **`@capacitor/preferences` solves the storage problem in section 7.2 outright.**
    It wraps Android `SharedPreferences` and iOS `UserDefaults`, which sit outside the
    WebView storage bucket. That is native-file durability without adding a SQLite
-   plugin, and it is the one Capacitor advantage that maps onto a specific weakness
-   already recorded in this plan.
+   plugin.
 5. **A secure origin is the default, not a setting.** Capacitor serves from
    `https://localhost` on Android and `capacitor://localhost` on iOS out of the box.
    Cordova reaches the same place, but only through the three preferences in section
    9.2, and its `file://` mode remains available as a silent footgun — which is why
    the sibling had to write `native-shell-origin.md` at all.
 
-**Where Cordova wins here, which is why the answer is still Cordova for now.** These
-are not rationalisations; they are real and they are specific to this project:
+**Where Cordova wins here, which is why the answer is still Cordova.** These are real
+and specific to this project:
 
 - **The disposable-platform model is tidier for a CI-only build.** This project has
   no native code and no native customisation beyond a handful of preferences. Cordova
@@ -932,10 +1120,6 @@ So the honest summary is: Capacitor is the better tool in general, and its speci
 advantages barely bite on an Android-only, plugin-free, CI-built app whose pipeline
 already exists. That is what makes staying defensible rather than merely convenient.
 
-Verify the current state of both projects before acting on this section at M6. The
-comparison above reflects the general shape of the two tools, not a check of their
-latest releases, and release cadence is one of the things being weighed.
-
 **The trigger to switch.** Move to Capacitor when any becomes true:
 
 1. **iOS is added.** Cordova's friction is worst on iOS, and the sibling's `ios` job
@@ -950,21 +1134,25 @@ latest releases, and release cadence is one of the things being weighed.
 4. **A third plugin is needed.** Two plugins do not collide. A plugin ecosystem does,
    and advantage 2 starts paying at roughly that point.
 
-No trigger applies to release 1. Record this decision in `.learnings/` during
-M6, with the trigger conditions, so it is not relitigated from scratch.
+No trigger applies to release 1. Record this decision in `.learnings/` during M6,
+with the trigger conditions, so it is not relitigated from scratch.
 
 Do not partially migrate. The web bundle is already wrapper-agnostic: the only
 wrapper-aware code is `ui/platform.ts` and the `__NATIVE_SHELL__` define from section
 4. Keep it that way, and a future switch touches `native/`, `release.yml`, and one
 Vite setting.
 
+Verify the current state of both projects before acting on this section at M6. The
+comparison above reflects the general shape of the two tools, not a check of their
+latest releases, and release cadence is one of the things being weighed.
+
 ### 9.2 The native shell must have an origin
 
 Do not serve the bundle from `file://`. The sibling's `native-shell-origin.md`
 records why: under `file://` there is no origin, so the WebView does not guarantee
-`localStorage` across app restarts or upgrades, and the page is not a secure
-context, which removes `navigator.clipboard` and `navigator.serviceWorker` entirely.
-The storage failure is silent, which is what makes it dangerous.
+`localStorage` across app restarts or upgrades, and the page is not a secure context,
+which removes `navigator.clipboard` and `navigator.serviceWorker` entirely. The
+storage failure is silent, which is what makes it dangerous.
 
 Set these preferences explicitly in `native/config.xml`, so a future edit has to be
 deliberate:
@@ -979,15 +1167,16 @@ Keep Vite's `base` at `'./'` for the native target regardless. Relative paths ar
 backstop against a future change to the scheme preferences, and the failure they
 prevent is loud and immediate rather than silent.
 
-MathsCross keeps stats, settings, the completed-seed set, and the in-progress puzzle
-in `localStorage`, with no server to recover any of it from. Losing the origin loses
-the player's history.
+MathsCross keeps stats, settings, completed daily date keys, and two in-progress
+boards in `localStorage`, with no server to recover any of it from. Losing the origin
+loses the player's history.
 
 ### 9.3 Plugins
 
-Keep the plugin list minimal. Every plugin is native code and a supply-chain
-surface. Do not add one without stating the current problem it solves. Match the
-sibling's set unless a stated need differs.
+Keep the plugin list minimal. Every plugin is native code and a supply-chain surface.
+Do not add one without stating the current problem it solves. Match the sibling's set
+unless a stated need differs. Note that a third plugin is a trigger to reconsider the
+wrapper, per section 9.1.
 
 ### 9.4 Android configuration
 
@@ -1003,18 +1192,178 @@ sibling's set unless a stated need differs.
   sibling's `com.bizzeh.sudoku`. It is permanent: Play will not allow a change, and a
   different identifier is a different app listing with no shared installs or reviews.
   Set it in `native/config.xml` at M6 and never edit it again.
-- The store display name is `MathsCross`, per section 1.0.
-- No parental gate. A gate exists to guard external links, ads, or purchases, and
-  release 1 has none, collects no data, and requests no `INTERNET` permission. There
-  is nothing behind a gate to protect. Re-check if release 2 adds any of the three.
-- A child audience brings Play Store obligations. Complete the Play Console families
-  declaration and confirm the listing's target age group before submission. The app
-  collects and transmits no data, which makes the declaration straightforward, but it
-  must still be filed.
+- The store display name is `MathsCross`, per section 1.2.
+- No families declaration and no parental gate. The audience is general adult puzzle
+  players, and release 1 has no external links, no ads, and no purchases. Both
+  questions return if the Kids tier arrives in release 2.
+
+### 9.5 Icon
+
+The accent alone will not distinguish MathsCross from Sudoku at 48 px, so the mark
+must differ too.
+
+A small cell fragment, two by two or three by three, with a visible `+` and `=` in
+indigo on a light ground. It reads as "grid plus arithmetic" at icon size, it is
+obviously not Sudoku's mark, and it is simple enough to author as hand-written SVG in
+minutes with no design tooling.
+
+Author one `public/icon.svg` and generate every raster size from it with
+`scripts/generate-icons.mjs`, reusing the sibling's script.
+
+### 9.6 Google Play store assets
+
+Everything Play needs that is not the binary. All of it is uploaded to Play Console
+by hand, none of it ships inside the app, and it all lives in `store/`. The sibling
+has solved this completely, including one non-obvious trap, so copy the approach
+rather than rediscovering it. Read `C:\code\sudoku\store\README.md` before starting.
+
+Treat the sizes and requirements below as the sibling's verified values, not as
+current policy. Play changes its requirements, so re-check each against Play Console
+before the M7 submission.
+
+#### What is drawn, and what is captured
+
+The split matters and is not arbitrary.
+
+**Drawn** — generated by `scripts/generate-store-assets.mjs`, committed to `store/`:
+
+| Asset | Size | Notes |
+|---|---|---|
+| Store icon | 512 x 512 PNG | Copy from `public/icons/icon-512.png`, do not redraw. A redrawn store icon drifts away from the installed one |
+| Feature graphic | exactly 1024 x 500 PNG | Play rejects any other size. No transparency |
+
+Reuse the sibling's zero-dependency PNG encoder in `scripts/png.mjs` and its 5x7
+bitmap font in `scripts/pixel-font.mjs`, so no rasteriser or design tool is needed to
+reproduce either asset. The font covers only the characters its graphic uses and
+throws on anything else, which means a change to the wording fails loudly instead of
+silently dropping a letter. Keep that behaviour.
+
+The feature graphic should read in the same visual language as the icon from section
+9.5: indigo ground, light grid, a few filled cells suggesting entered digits, and an
+operator glyph. It must be legible as a thumbnail, so no more than a few words.
+
+**Captured** — screenshots, taken from the running app and never drawn. A store
+screenshot represents the product, and an illustration of a grid that is not the
+actual UI misleads whoever is deciding whether to install. This is a policy risk as
+well as a dishonesty one.
+
+| Set | Size | Notes |
+|---|---|---|
+| Phone | 1080 x 1920 | At least 4 needed for promotion eligibility |
+| 7-inch tablet | 1920 x 1080 | Landscape shows the side-by-side layout |
+| 10-inch tablet | 2560 x 1440 | Both sides must be 1080 px or more |
+
+Play requires exactly 16:9 or 9:16, so use the listed dimensions rather than a real
+device's odd aspect ratio.
+
+#### The trap: set the CSS viewport, not the pixel size
+
+This is the single thing to get right, and it cost the sibling enough to write down.
+
+The board is sized with a `min()` that caps it — the sibling uses
+`min(100%, calc(100dvh - 16rem), 640px)`. So a CSS viewport of 1080 px wide does
+**not** produce a bigger board. It produces the same capped board sitting in the top
+third of an otherwise empty frame, which looks broken.
+
+What is wanted is a phone-sized CSS viewport at a device pixel ratio of 2, which is
+what a real phone actually is:
+
+| CSS viewport | DPR | Output |
+|---|---|---|
+| 540 x 960 | 2 | 1080 x 1920, laid out as a phone |
+| 1080 x 1920 | 1 | 1080 x 1920, but laid out as a tablet |
+
+For the landscape sets, a CSS viewport of 768 x 432 at DPR 2.5 gives 1920 x 1080 and
+triggers the aspect-ratio layout switch from section 8.2. Expect margins either side
+of the board: at 16:9 the board is capped by height, and that is genuinely how the
+app looks on a 16:9 tablet.
+
+Confirm MathsCross's own board-sizing rule before applying these numbers — the cap
+may differ from 640 px, and the arithmetic follows the cap.
+
+Verify every captured file afterwards, because a capture at the wrong DPR silently
+doubles or halves the output:
+
+```bash
+node -e "const b=require('fs').readFileSync(process.argv[1]);console.log(process.argv[1],b.readUInt32BE(16)+'x'+b.readUInt32BE(20))" store/screenshots/phone-1-board.png
+```
+
+The sibling notes that emulated desktop-browser captures did not match the app on a
+real handset. Treat the table as pixel arithmetic only and judge composition on a
+device or emulator.
+
+#### What to show
+
+Four phone screenshots, in this order. The choices are MathsCross-specific and differ
+from the sibling's, because pencil marks are deferred and the evaluation rule needs
+explaining:
+
+1. A part-solved Medium board, showing the grouping cue on a multi-cell number.
+2. The first-run explainer from section 8.7. The left-to-right rule is the game's one
+   surprising rule, and a player who learns it from the listing arrives already
+   understanding the mechanic.
+3. The difficulty menu.
+4. Statistics, showing a daily streak.
+
+Use the landscape sets on the side-by-side layout, since that is what a tablet user
+is choosing between.
+
+Set the theme deliberately rather than accepting whatever the machine is in. A mix of
+light and dark shots looks accidental; one theme throughout, with at most one shot
+showing the alternative, reads as a choice.
+
+Name files so the upload order is obvious:
+
+```
+store/screenshots/phone-1-board.png
+store/screenshots/phone-2-rules.png
+store/screenshots/phone-3-difficulty.png
+store/screenshots/phone-4-stats.png
+store/screenshots/tablet7-1-board.png
+store/screenshots/tablet10-1-board.png
+```
+
+#### Listing text and declarations
+
+Keep all of it in `store/listing.md`, following the sibling's file. It holds the app
+name, the short description, the full description, and the console answers, so that
+what was submitted is recorded rather than remembered.
+
+| Field | Limit | MathsCross value |
+|---|---|---|
+| App name | 30 characters | `MathsCross` |
+| Short description | 80 characters | Written at M7. Lead with offline and no ads |
+| Full description | 4000 characters | Written at M7 |
+
+Keep the text honest. Every claim must be one the app actually meets. Overstating a
+puzzle game is both a policy risk and the fastest route to one-star reviews.
+
+MathsCross has an unusually easy set of declarations, and the listing should say so
+plainly because it is a genuine differentiator:
+
+- **Data Safety: no data collected and no data shared.** This is trivially true and
+  provable — the app requests no `INTERNET` permission per section 9.4, so it cannot
+  transmit anything. Answer the questionnaire accordingly.
+- **Content rating:** general audience. The questionnaire has no interactive
+  elements, user-generated content, or ads to declare. Section 9.4 already removed
+  the families declaration along with the Kids tier.
+- **Privacy policy:** Play requires a reachable URL even for an app that collects
+  nothing. The sibling ships a `privacy.html` inside its native bundle; the
+  MathsCross equivalent should be published on the GitHub Pages site so the URL is
+  stable and independent of a release. State plainly that no data is collected,
+  stored remotely, or shared.
+- **Ads:** declare none.
+
+#### Where this sits in the plan
+
+Store assets are M7 work, but two dependencies land earlier: the icon at M5 (section
+9.5) and the screenshots, which cannot be captured until the UI is finished at M6.
+Generating the drawn assets is minutes; the screenshots are the part that takes an
+afternoon.
 
 ## 10. GitHub Actions pipelines
 
-Three workflows, matching the sibling's split and triggers. Node 20 in all three.
+Four workflows. Pin the Node version and read it in every workflow.
 
 ### 10.1 `ci.yml` — pull requests and pushes to `main`
 
@@ -1022,15 +1371,17 @@ Three workflows, matching the sibling's split and triggers. Node 20 in all three
 2. Set up Node 20 with the npm cache.
 3. `npm ci`.
 4. `npm run typecheck`.
-5. `npm test`.
-6. `npm run test:slow`. The slow suite covers 100 seeds per difficulty and is
-   separate because a constrained difficulty can need many attempts.
+5. `npm run lint`.
+6. `npm test` — the fast suite only.
 7. `npm run build`.
 8. `npm run build:native`. The native bundle builds from the same source through a
    second config, so a change can break it while the web build still passes. It costs
    seconds and is the only step that would catch that.
+9. After M3, the bundle size gate from section 8.4.
 
 `permissions: contents: read`. The workflow must fail if any step fails.
+
+The slow suite is deliberately **not** here. See section 10.4.
 
 ### 10.2 `pages.yml` — on a `v*` tag
 
@@ -1038,7 +1389,7 @@ Pages deploys on tags, not on pushes to `main`. Pushes to `main` build and test 
 `ci.yml` only. This is the sibling's arrangement and MathsCross follows it.
 
 1. Checkout with `fetch-depth: 0`, so `git describe` can stamp the version.
-2. Set up Node 20. `npm ci`. Typecheck. Unit tests.
+2. Set up Node 20. `npm ci`. Typecheck. Fast tests.
 3. `actions/configure-pages`, and pass its `base_path` output as `APP_BASE` to the
    build. A project repository serves from `/<repo>/`, so every asset path, the
    manifest scope, and the service worker scope must carry it. A custom domain
@@ -1049,9 +1400,9 @@ Permissions: `contents: read`, `pages: write`, `id-token: write`. Concurrency gr
 `pages` with `cancel-in-progress: false`, so a tag pushed during a deploy still
 publishes.
 
-Before the first tag, add a tag rule to the `github-pages` environment. The
-sibling's `github-pages-tag-deploys.md` records that a tag-triggered deploy is
-rejected until that rule exists.
+Before the first tag, add a tag rule to the `github-pages` environment. The sibling's
+`github-pages-tag-deploys.md` records that a tag-triggered deploy is rejected until
+that rule exists.
 
 ### 10.3 `release.yml` — on a `v*` tag
 
@@ -1067,8 +1418,8 @@ stop the web release.
    part so `v1.2.3-rc1` becomes `1.2.3`.
 6. Compute `versionCode` as `major * 1000000 + minor * 1000 + patch`. Do not rely on
    `cordova-android`'s default of `major * 10000 + minor * 100 + patch`: it collides,
-   so `1.0.100` and `1.1.0` both produce `10100` and the second upload is rejected
-   as not an increase. Fail the build if minor or patch reaches 1000.
+   so `1.0.100` and `1.1.0` both produce `10100` and the second upload is rejected as
+   not an increase. Fail the build if minor or patch reaches 1000.
 7. Restore the keystore from `ANDROID_KEYSTORE_BASE64`, stripping whitespace before
    decoding, and write `build.json` with `jq` rather than passing passwords on a
    command line where they would appear in the process list and the log. Build
@@ -1085,9 +1436,9 @@ stop the web release.
 
 Rules:
 
-- Never commit a keystore, a password, or a signing config containing a secret. Copy
-  the sibling's `.gitignore` block covering `*.p12`, `*.pfx`, `*.jks`, `*.keystore`,
-  `*.base64`, and `build.json`, anywhere in the tree.
+- Never commit a keystore, a password, or a signing config containing a secret. The
+  `.gitignore` block covering `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.base64`,
+  and `build.json` is a backstop, not permission.
 - Never echo a secret to the log.
 - Derive the app version from the git tag. Do not maintain a hand-edited version in a
   second place.
@@ -1098,14 +1449,32 @@ Rules:
   account may need a 14-day closed test before production access is granted. Set the
   `PLAY_TRACK` variable to `internal` in the meantime.
 
+### 10.4 `slow.yml` — nightly, on tags, and on demand
+
+The slow suite runs 100 seeds per difficulty across three difficulties. Per the
+sibling's cost model in section 5.6, that is potentially minutes of compute, and it
+grows with any generator regression. Running it on every pull request would tax every
+push for a signal that changes rarely.
+
+Triggers: `schedule` nightly, `push` on `v*` tags, and `workflow_dispatch`.
+
+1. Checkout, Node 20, `npm ci`.
+2. `npm run test:slow`.
+3. Fail if the job exceeds a wall-clock ceiling. Set the ceiling at M2 from the
+   measured figure plus headroom. Without it, a generator regression turns into a
+   quietly lengthening job instead of a failure.
+
+The suite must also assert the properties in section 13.4, including achieved mask
+density, so a collapsing difficulty ladder fails here.
+
 ## 11. Deviations from the sibling
 
-Six, each with a reason. Any further deviation must be added here with its reason.
+Eight, each with a reason. Any further deviation must be added here with its reason.
 
 1. **`--colour-accent` differs.** Two apps from the same author with the same accent
    are hard to tell apart in a task switcher. Section 8.1.
-2. **`--tap-min` is 56 px at the Kids tier.** Sudoku has no child audience. Section
-   8.2.
+2. **`--colour-note` is deleted.** It serves pencil marks, which are deferred.
+   Shipping an unused token invites someone to find a use for it. Section 8.1.
 3. **A new `--colour-group` token, and a grouping cue on the board.** Sudoku has no
    multi-cell values, so it has nothing to group. Sections 8.1 and 8.5.
 4. **Explicit touch-response rules.** `touch-action: manipulation`, a transparent tap
@@ -1116,8 +1485,13 @@ Six, each with a reason. Any further deviation must be added here with its reaso
    Section 8.4. Consider back-porting.
 6. **One `.gitignore` at the root, not two.** The sibling splits Cordova's ignores
    into `native/.gitignore`. Here they live in the root file, because `native/` does
-   not exist until M6 and one list is easier to keep correct than two. If `native/`
-   ever gains ignores specific to a local workflow, split it then.
+   not exist until M6 and one list is easier to keep correct than two.
+7. **Two in-progress slots, not one.** The sibling discards its single in-progress
+   game when a new one starts. A date-bound daily cannot be treated that way. Section
+   7.1.
+8. **The slow suite runs nightly and on tags, not on every pull request.** The
+   sibling runs its slow suite in `ci.yml`. A MathsCross attempt costs more than a
+   Sudoku attempt, so the same arrangement would tax every push. Section 10.4.
 
 ## 12. Sibling learnings that apply
 
@@ -1155,7 +1529,10 @@ Tests must pass before any task is reported as done.
 - Assert a leading zero such as `[0][5]` is rejected.
 - Assert a run with no `equals` cell is reported illegal.
 - Assert an equation with no `operator` cell is reported illegal.
-- Assert an isolated single cell is reported illegal.
+- Assert a cell belonging to no equation is reported illegal.
+- **Assert a length-one run that belongs to a perpendicular equation is legal.** This
+  is the rule an earlier draft got wrong, and getting it wrong again makes every
+  5 x 5 grid unbuildable. Section 2.4.
 
 ### 13.2 Solver tests
 
@@ -1175,18 +1552,26 @@ For a small fixed seed set per difficulty, assert:
 - Every division divides exactly.
 - Every number fits its mesh-assigned cell width, with no leading zero.
 - Operand widths agree at every intersection.
-- The mesh forms a single connected component with no parallel adjacent equations.
+- The mesh forms a single connected component, with no two parallel equations in
+  adjacent rows or columns, and every non-`block` cell in at least one equation.
 - Every equation contains at least one operator.
 - The output has exactly one solution.
 - `generate({ seed, difficulty })` called twice returns identical output. This is the
   determinism guard. It must never be skipped or marked flaky.
+- The bundled starter puzzle in `starter.ts` satisfies every property above.
 
 ### 13.4 Generator tests, slow suite
 
-`generate.slow.test.ts`, run by `vitest.slow.config.ts`. 100 seeds per difficulty.
-Assert every property in section 13.3, and record median and worst attempts, median
-and worst milliseconds, and achieved mask density per difficulty. Write the table
-into `.learnings/generation-measurements.md`.
+`generate.slow.test.ts`, run by `vitest.slow.config.ts` in `slow.yml`. 100 seeds per
+difficulty. Assert every property in section 13.3, and additionally:
+
+- **Achieved mask density is within 10 percentage points of target**, for both digits
+  and operators, at every difficulty. This is the assertion that catches Hard
+  silently collapsing into Medium because uniqueness forced too many cells back.
+- Generation succeeds within the attempt cap for at least 99% of seeds.
+
+Record median and worst attempts, median and worst milliseconds, and achieved mask
+density per difficulty into `.learnings/generation-measurements.md`.
 
 ### 13.5 Worker and client tests
 
@@ -1195,18 +1580,36 @@ into `.learnings/generation-measurements.md`.
 - An exhausted attempt cap resolves with reason `exhausted`, not a rejection.
 - Two concurrent requests resolve independently and are not confused by request id.
 - `drawSeed` uses `crypto.getRandomValues`.
+- Pre-generation is cancelled when the player changes difficulty, per section 5.8.
 
-### 13.6 Integration tests
+### 13.6 State, persistence and daily tests
+
+- Undo reverts exactly one cell entry. Redo reapplies it. A new move truncates redo.
+- The history caps at 200 moves and the oldest is dropped, not the newest.
+- Undo history survives a save and reload.
+- Starting a free-play puzzle leaves the daily slot untouched.
+- A corrupt or missing value in either slot yields a default rather than a throw.
+- On a new UTC date, an unfinished previous daily is discarded and the player is
+  told.
+- A streak increments only on same-UTC-date completion, and a missed day resets it.
+- A completed daily recorded by date key survives a change to `GENERATOR_VERSION`.
+- The timer pauses on `visibilitychange` and resumes afterwards.
+
+### 13.7 Integration and accessibility tests
 
 Drive one puzzle to completion through the DOM: focus a cell, enter a digit, move to
 an operator cell, enter an operator, assert the solved state. Cover a multi-cell
-number and the Android back button path.
+number, undo, and the Android back button path.
+
+Assert the board exposes `role="grid"`, that every cell has an `aria-label` naming
+its number and equations, and that equation state is reflected in a non-colour
+attribute as well as a class.
 
 Note the sibling's `service-worker-unverifiable-in-pane.md`: the in-app browser pane
 cannot register a service worker, so a passing build is not evidence of offline
 capability. Verify offline behaviour on a real browser or device.
 
-### 13.7 Regression tests
+### 13.8 Regression tests
 
 Every fixed bug must gain a test that fails before the fix and passes after it.
 
@@ -1216,105 +1619,202 @@ Each milestone ends with tests passing in CI.
 
 - **M0 — Foundations.** Repository scaffolded from the sibling's shape:
   `package.json`, `tsconfig.json`, the two Vite configs, the two Vitest configs,
-  `.gitignore` including the signing block, `standards/`, `.learnings/`, `ci.yml`,
-  `pages.yml`. `tokens.css` and `layout.css` copied with the accent changed. A blank
-  page builds for both targets.
+  `README.md`, `standards/`, `.learnings/`, `ci.yml`, `pages.yml`, `slow.yml`.
+  `tokens.css` and `layout.css` copied with the accent changed and `--colour-note`
+  removed. A blank page builds for both targets. `.gitignore` and `.gitattributes`
+  are already committed.
+- **M0.5 — Paper playtest. A gate, not a milestone.** See section 14.1. M1 may start
+  in parallel, but **M2 must not begin until M0.5 passes.**
 - **M1 — Engine core.** `types.ts`, `difficulty.ts`, `rng.ts`, `grid.ts`, `parse.ts`,
   `evaluate.ts`, `solver.ts`, `test-fixtures.ts`. The section 2.8 fixture parses and
-  evaluates. All section 13.1 tests pass. Record the accepted derived ranges from section 2.6 in `.learnings/`.
+  evaluates. All section 13.1 tests pass, including the length-one run case. Record
+  the accepted derived ranges from section 2.6 in `.learnings/`.
 - **M2 — Generation.** `mesh.ts` including operand widths, `fill.ts`, `mask.ts`,
-  `generate.ts`, `generate.worker.ts`, `game/generate-client.ts`. Fast and slow
-  suites pass for Easy. Run the slow suite, set the attempt cap from the result, and
-  write `.learnings/generation-measurements.md`. Record the daily versioning
-  constraint from section 5.7.
+  `generate.ts`, `generate.worker.ts`, `game/generate-client.ts`, `starter.ts`. Fast
+  and slow suites pass for Easy. Run the slow suite, set the attempt cap and the
+  `slow.yml` wall-clock ceiling from the result, and write
+  `.learnings/generation-measurements.md`.
 - **M3 — Playable web.** Board rendering, the grouping cue, focus, the numeric pad,
-  per-equation feedback, completion detection, the generating state with progress and
-  cancel. The touch-response rules from section 8.3. Easy only. Measure the bundle,
-  tighten the section 8.4 ceilings to the measurement, and add the size gate to
-  `ci.yml`.
-- **M4 — Difficulty breadth.** Kids, Medium, and Hard generation. Negative values,
-  division, the operator pad, operator masking, the Kids touch target, the menu and
-  difficulty selection. Play-test the Kids and Easy gap.
-- **M5 — Persistence, daily, PWA.** Persistence with the solution excluded, resume in
-  progress, stats, settings, the four themes, daily seeding and day-of-week rotation,
-  streaks, the service worker with the prompt-to-update flow, icons.
+  per-equation feedback with a non-colour channel, completion detection, the
+  generating state with progress and cancel, undo and redo, the timer, the
+  first-run explainer from section 8.7, and the accessibility work from section 8.8.
+  The touch-response rules from section 8.3. Easy only. Measure the bundle, tighten
+  the section 8.4 ceilings, and add the size gate to `ci.yml`.
+- **M4 — Difficulty breadth.** Medium and Hard generation. Negative values, division,
+  the operator pad, operator masking. Settle Hard's operator masking percentage from
+  the M0.5 result and the mask-density assertion.
+- **M5 — Persistence, daily, PWA.** The two slots, resume with undo intact, stats per
+  section 7.3, settings, the four themes, daily seeding and UTC rotation, streak
+  semantics per section 7.4, the service worker with the prompt-to-update flow, the
+  icon from section 9.5.
 - **M6 — Cordova and Android.** `native/` project with the origin preferences from
   section 9.2, touch entry, the back button, safe areas, permission removal, CSP,
   `release.yml` producing a signed AAB. Verify `localStorage` survives an app restart
   and upgrade on a device. Verify tap latency on a device. Measure the installed app
   size and set the real ceiling. Record the Cordova-over-Capacitor decision and its
   trigger conditions in `.learnings/`.
-- **M7 — Release hardening.** Accessibility pass, low-end device testing, store
-  assets, the Play Console families declaration, store listing, first manual
-  submission.
+- **M7 — Release hardening.** Low-end device testing. Store assets per section 9.6:
+  generate the drawn pair, capture all three screenshot sets from the finished UI,
+  write `store/listing.md`, publish `privacy.html` to Pages, and answer the Data
+  Safety and content-rating questionnaires. First manual Play submission.
+
+### 14.1 M0.5 — the playtest gate
+
+The plan commits M1 and M2 to a parser, an evaluator, a solver, a mesh generator, a
+fill, a mask and a worker before any human plays anything. The risk is concrete:
+cross-sums with left-to-right evaluation may be tedious rather than satisfying, and
+discovering that after the most expensive work in the plan is finished would be the
+worst possible order.
+
+**The test.** Hand-author boards on paper or in a text file — one Easy, one Medium,
+one Hard with every operator blank — and solve them yourself. It costs about an hour,
+needs no code, and it produces test fixtures that section 13 needs anyway.
+
+**The criterion.** Pass means you would voluntarily play a third.
+
+**On failure:**
+
+- If **Easy** fails, stop. Do not write engine code for a mechanic that is not
+  enjoyable at its gentlest. Consider the pivot in section 14.2.
+- If only **Hard** fails, that is a tuning result and not a kill. Lower the operator
+  masking percentage in section 2.7 and continue.
+
+Write the outcome into `.learnings/` either way. A rejected mechanic is worth more
+written down than forgotten, and a passing playtest is the justification for
+everything after it.
+
+### 14.2 The pivot, if M0.5 fails on Easy
+
+The pivot is **operator placement**, the variant in the original specification: the
+grid arrives pre-filled with numbers and blank operator cells, and the player inserts
+`+`, `-`, `*`, `/` to make every equation valid. It has a much smaller search space
+and a different feel.
+
+The useful and non-obvious fact is how little would be lost. Roughly three quarters
+of this plan is mechanic-independent.
+
+**Survives untouched:** the repository layout, both Vite configs, all four workflows,
+`rng.ts`, `grid.ts`, `parse.ts`, `evaluate.ts`, the worker and client, persistence
+and both slots, stats and streaks, theming, onboarding, accessibility, every
+touch-response decision, the bundle ceilings, the icon, and the entire native shell.
+
+**Invalidated:** operand cell widths in section 5.1, the value fill in section 5.2,
+the digit-masking rules in section 5.4, and multi-cell numbers in section 2.2 —
+because operator placement pre-fills the numbers, so `--colour-group` and the
+grouping cue go with them.
+
+That is three engine files and one CSS token. Writing this down converts a
+frightening-sounding failure into a costed one.
 
 ## 15. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Generation cost is dominated by a narrow acceptance band, as it was in the sibling, and a difficulty becomes unusably slow | Long waits or exhausted caps | Attempt-capped generation in a worker with progress and cancel; measure in M2; widen the band before optimising code; mesh caching held in reserve. Section 5.6 |
-| Operand cell widths disagree at an intersection | Generator emits unsolvable or misparsed puzzles | Assert width consistency at the end of phase 1; property test in section 13.3 |
-| Phase 1 fails to satisfy connectivity, spacing, intersection count, and width sums together at 9 x 9 | Generation loops or returns a degenerate mesh | Attempt cap; mesh caching as the reserved optimisation |
-| The native shell is served from `file://` | `localStorage` silently lost on app upgrade, and the player's history with it | The explicit preferences in section 9.2; a device restart-and-upgrade check in M6; `native-shell-origin.md` |
-| A generator change silently alters past daily puzzles | Players lose streak parity and trust | Frozen `DAILY_GENERATOR_VERSION`, the determinism guard, decision recorded in `.learnings/` |
-| Left-to-right evaluation is refactored into PEMDAS by a later contributor | Every existing puzzle becomes unsolvable | The explicit non-PEMDAS test in section 13.1; a comment in `evaluate.ts` stating why precedence is absent |
-| Multi-cell numbers are not visually grouped | Players misread `1 5` as two operands and believe correct answers are rejected | The grouping cue in section 8.5, tested in M3 with the fixture board |
-| Kids and Easy feel identical, since both are 5 x 5 single-digit | The Kids tier adds no value | Play-test at M4; widen by masking and intersection count within 5 x 5, per section 2.7 |
-| MathsCross and Sudoku are indistinguishable on a home screen | Players open the wrong app | A different accent and a distinct icon. Sections 8.1 and M5 |
-| The first tag deploy is rejected by the `github-pages` environment | A release ships no web build | Add the tag rule before the first tag; `github-pages-tag-deploys.md` |
-| Cordova maintenance stalls on a future Android API level | Blocked Play Store updates | Keep the plugin list minimal and the web bundle wrapper-agnostic. Switch to Capacitor at either trigger in section 9.1 |
-| A torn `localStorage` write leaves inconsistent state | Corrupt stats or a lost puzzle presented as a crash | One JSON value per key, a version field on every shape, and reads that return a default rather than throwing. Section 7.2 |
-| iOS web players lose progress to the 7-day eviction | Silent loss of streaks | Documented, not fixed: IndexedDB would not fix it. Home-screen installs are exempt. Revisit with a native file if iOS ships. Section 7.2 |
-| The 300 ms WebView tap delay is left in place | The game feels unresponsive and unlike a native app | `touch-action: manipulation` and the rest of section 8.3, verified on a device where the delay actually reproduces |
-| A dependency added without weighing it inflates the bundle | Slower download, larger install | The ceilings and CI gate in section 8.4; every new dependency states its gzipped cost |
+| The mechanic is not enjoyable | Every milestone after M2 is wasted | M0.5 gates M2, with a defined criterion and a costed pivot. Sections 14.1 and 14.2 |
+| Hard's 100% operator masking is unsolvable or unfun | The top of the difficulty ladder is unusable | Demoted to a hypothesis in section 2.7, tested by hand at M0.5, expected to settle at 60 to 70% |
+| Uniqueness forces so many cells back that Hard becomes Medium | The ladder silently collapses and nobody notices | Achieved mask density reported by the generator and asserted within 10 points in section 13.4 |
+| Generation cost is dominated by a narrow acceptance band, as in the sibling | Long waits or exhausted caps | Worker with progress and cancel, attempt cap, measured at M2, band widened before code is optimised. Section 5.6 |
+| A new player assumes PEMDAS and concludes the game is broken | Uninstall on first play | The first-run explainer in section 8.7, built at M3 |
+| The first board on a fresh install makes the player wait | Uninstall before the first puzzle | Bundled starter puzzle and background pre-generation. Section 5.8 |
+| Operand cell widths disagree at an intersection | Generator emits unsolvable or misparsed puzzles | Width consistency asserted at the end of phase 1 and property-tested in section 13.3 |
+| The mesh legality rules are misread again | No valid 5 x 5 grid exists, or the reference board is rejected | Both rules restated in sections 2.4 and 5.1 with the failure spelled out, plus the explicit test in section 13.1 |
+| Left-to-right evaluation is refactored into PEMDAS | Every existing puzzle becomes unsolvable | The explicit non-PEMDAS test in section 13.1 and a comment in `evaluate.ts` stating why precedence is absent |
+| Multi-cell numbers are not visually grouped | Players misread `1 5` as two operands and think correct answers are rejected | The grouping cue in section 8.5, tested at M3 against the fixture board |
+| Equation state is conveyed by colour alone | Unusable for colour-blind players, and it is a three-state distinction | A second non-colour channel, required by section 8.8 and asserted in section 13.7 |
+| Accessibility is deferred to M7 | Retrofitting a grid widget costs several times building it right | Pulled forward into M3. Section 8.8 |
+| The timer runs while the app is backgrounded | Every time-based stat is worthless | Pause on `visibilitychange` and the Cordova pause event. Section 7.3 |
+| A half-finished daily is destroyed by a free-play game | A streak breaks through no fault of the player | Two separate slots, and free play never touches the daily. Section 7.1 |
+| The native shell is served from `file://` | `localStorage` silently lost on app upgrade | The explicit preferences in section 9.2 and a device restart-and-upgrade check at M6 |
+| A torn `localStorage` write leaves inconsistent state | Corrupt stats or a lost board presented as a crash | One JSON value per key, separate keys per slot, version fields, reads that return defaults. Section 7.2 |
+| iOS web players lose progress to the 7-day eviction | Silent loss of streaks | Documented, not fixed: IndexedDB would not fix it, and home-screen installs are exempt. Section 7.2 |
+| The 300 ms WebView tap delay is left in place | The game feels unresponsive | `touch-action: manipulation` and the rest of section 8.3, verified on a device |
+| A dependency added without weighing it inflates the bundle | Slower download, larger install | The ceilings and CI gate in section 8.4 |
+| The slow suite makes every push slow | CI becomes something to avoid | Moved to nightly, tags, and manual dispatch, with a wall-clock ceiling. Section 10.4 |
+| The first tag deploy is rejected by the `github-pages` environment | A release ships no web build | Add the tag rule before the first tag |
+| Screenshots captured at the wrong CSS viewport show a small board in an empty frame | The listing makes the game look broken, or Play rejects the aspect ratio | Phone-sized CSS viewport at DPR 2, never a 1080 px CSS width. Verify every file's real dimensions after capture. Section 9.6 |
+| Play rejects the submission on an asset size or a missing declaration | The release stalls at the last step | Sizes and declarations listed in section 9.6 and re-checked against Play Console before submission, since Play changes requirements |
+| The store icon drifts from the installed icon | The listing and the home screen disagree | `store/icon-512.png` is copied from `public/icons/`, never redrawn. Section 9.6 |
+| Cordova maintenance stalls on a future Android API level | Blocked Play Store updates | Minimal plugin list, wrapper-agnostic bundle, four switch triggers in section 9.1 |
 
-## 16. Decisions taken, and what remains
+## 16. Decisions taken
 
 No open question blocks any milestone. Every decision this plan depends on is taken
 and recorded in the section named below.
 
 | Question | Decision | Section |
 |---|---|---|
-| Core mechanic | As specified: intersecting equations, left-to-right evaluation | 2 |
+| Project purpose | Hobby and portfolio. No revenue, no deadline | 1.1 |
+| Core mechanic | As specified, gated by a playtest before the generator is built | 2, 14.1 |
 | One digit or one integer per cell | One digit | 2.1 |
 | Multi-digit number bounds | Maximal run of adjacent digit cells | 2.2 |
 | Negative representation | Unary minus, by cell position | 2.3 |
+| Grid legality | Every non-block cell in an equation; every equation has an operator | 2.4 |
+| Parallel equation spacing | Not in adjacent rows or columns; no block-row requirement | 5.1 |
 | Degenerate equations | Illegal | 2.4 |
-| Value ranges | Derived from equation length, original figures unreachable and accepted | 2.6 |
-| Kids grid size | 5 x 5. A 4 x 4 grid cannot hold an equation | 2.7 |
-| Easy grid size | Stays 5 x 5 | 2.7 |
-| Negative values by difficulty | Off at Kids and Easy, on at Medium and Hard | 2.7 |
+| Value ranges | Derived from equation length; original figures unreachable and accepted | 2.6 |
+| Kids tier | Deferred to release 2 | 1.5, 17 |
+| Easy grid size | 5 x 5, and the entry point | 2.7 |
+| Hard operator masking | 100% is provisional, to be settled at M0.5 and M4 | 2.7 |
+| Negative values by difficulty | Off at Easy, on at Medium and Hard | 2.7 |
+| Undo | In scope. 200 moves, single-cell, persisted | 8.6 |
+| Mistake counting | Out of scope. Not definable for this mechanic | 1.5 |
+| Pencil marks | Out of scope; `--colour-note` deleted | 1.5, 8.1 |
+| Onboarding | First-run explainer for the left-to-right rule | 8.7 |
+| Animation | One reduced-motion-gated completion transition, nothing else | 8.3 |
+| Accessibility timing | Pulled forward from M7 into M3 | 8.8 |
+| First launch | Bundled starter puzzle plus background pre-generation | 5.8 |
 | Storage API | `localStorage`, one JSON value per key | 7.2 |
-| Wrapper | Cordova, confirmed against Capacitor | 9.1 |
+| In-progress slots | Two: free play and daily | 7.1 |
+| Stats | Completions only; median times; streaks by date key | 7.3 |
+| Daily generator version | No frozen version. Persist the board, record dates | 5.7 |
+| Stale daily | Discarded on a new UTC date, with notice | 7.4 |
+| Slow suite trigger | Nightly, tags, and manual, not per pull request | 10.4 |
+| Wrapper | Cordova, confirmed against Capacitor, four switch triggers | 9.1 |
 | Package identifier | `com.bizzeh.mathscross`, permanent | 9.4 |
-| Parental gate | None | 9.4 |
-| Repository and Pages path | `mathscross` | 1.0 |
+| Parental gate | None. The audience is general adult players | 9.4 |
+| Repository and Pages path | `mathscross` | 1.2 |
 | Accent | Indigo `#3a5fa8` / `#8fb0f0` | 8.1 |
-| Daily difficulty | Rotates by day of week, Kids excluded | 5.7 |
+| Icon | Cell fragment with `+` and `=`, hand-authored SVG | 9.5 |
+| Store assets | Drawn pair generated, screenshots captured from the real UI | 9.6 |
+| Data Safety | No data collected, no data shared. Provable via the absent permission | 9.6 |
+| Daily difficulty | Rotates by UTC day of week | 5.7 |
+| Documentation | `README.md` and `.learnings/`. No `docs/` | 3.2 |
 
 ### 16.1 Deferred to a measurement
 
-These are not open questions. Each has a stated default and a milestone at which a
-measurement replaces the default with a number. Do not decide them early by
-guessing.
+Each has a stated default and a milestone at which a measurement replaces it. Do not
+decide these early by guessing.
 
 1. **The attempt cap.** Default 5000, from the sibling's corrected value. M2 measures
    100 seeds per difficulty and sets the real figure. Section 5.6.
-2. **The bundle ceilings.** Defaults in section 8.4 are budgets, not measurements. M3
+2. **The `slow.yml` wall-clock ceiling.** Set at M2 from the measured figure plus
+   headroom. Section 10.4.
+3. **The bundle ceilings.** Defaults in section 8.4 are budgets, not measurements. M3
    tightens the JS and CSS figures; M6 sets the installed-app figure from the AAB.
-3. **Whether mesh caching is needed.** Held in reserve. Build it only if M2's
-   measurement shows a difficulty cannot meet its attempt cap. Section 5.6.
+4. **Hard's operator masking percentage.** 100% provisionally. M0.5 tests it by hand
+   and M4 settles it. Section 2.7.
+5. **Whether mesh caching is needed.** Held in reserve. Build it only if M2 shows a
+   difficulty cannot meet its attempt cap. Section 5.6.
 
-### 16.2 Deferred to a play-test
+### 16.2 Re-check on a scope change
 
-1. **Whether Kids and Easy feel distinct.** Both are 5 x 5 single-digit, separated by
-   masking density, intersection count, and touch target. M4 play-tests. If the gap is
-   too thin, widen it within 5 x 5 rather than moving Easy to 7 x 7. Section 2.7.
-
-### 16.3 Re-check on a scope change
-
-1. **The parental gate**, if release 2 adds an external link, ads, or purchases.
-   Section 9.4.
+1. **The parental gate and the families declaration**, if the Kids tier arrives in
+   release 2, or if any release adds an external link, ads, or purchases.
 2. **The storage API**, if iOS ships, if stored state approaches 2 MB, or if
    statistics grow into a queryable history. Section 7.2.
 3. **The wrapper**, at any of the four triggers in section 9.1.
+
+## 17. Release 2 backlog
+
+Deferred deliberately, recorded here so that nothing is either forgotten or
+accidentally implemented. No folder or file exists for any of these until it is in
+scope.
+
+| Item | Why deferred | What would trigger it |
+|---|---|---|
+| Kids tier | One digit per cell forced it to 5 x 5 single-digit, leaving it near-identical to Easy. It cost its own generation tuning, play-testing, an enlarged touch target, and the families declaration | A real child audience, or a decision to widen the ladder downward. Would likely need a mechanic tweak rather than only a parameter change, since 5 x 5 is already the minimum viable grid |
+| Tile placement mode | A variant in the original specification, not the primary mechanic. Doubles the input model and the solver's job | Release 1 ships and the primary mechanic proves durable |
+| Hints | Needs the solver's deduction log, which section 6.3 already records, plus a UI for revealing a single deduction rather than an answer | Player feedback that Hard is impassable rather than hard |
+| Pencil marks | Sudoku needs them because a cell has nine candidates. A MathsCross digit cell has ten but far more constraint from its equations, so the value is unproven | Evidence from play that players want to record candidates. Restores `--colour-note` |
+| Save codes and sharing | Needs `GENERATOR_VERSION` to be meaningful in an encoded id, which section 5.5 already preserves | A wish to share a specific board, or cross-device transfer without accounts |
+| iOS build | Cordova's friction is worst on iOS and the sibling's job is unproven. Also the point at which the wrapper decision reverses | A decision to publish on the App Store. Migrate to Capacitor at the same time, per section 9.1 |
