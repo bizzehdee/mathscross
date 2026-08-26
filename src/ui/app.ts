@@ -1,19 +1,16 @@
 /**
- * The playing screen. Plan sections 5.8, 7, 8.5, 8.6, 8.7 and 8.8.
+ * The application shell: screens, and the session that moves between them.
+ * Plan sections 3, 5.8, 7, 8.5, 8.6, 8.7 and 8.8.
  *
- * Owns the session and wires the board, keypad, controls, menu, onboarding card,
- * stats and generating state together. Everything it renders comes from
- * `GameState` and `boardStatus`; it computes no arithmetic of its own.
+ * Five screens, one at a time. The app opens on **home** rather than dropping
+ * straight into a board: a player arriving wants to choose what to do, and a board
+ * that appears unbidden answers a question nobody asked. Statistics, settings and
+ * the how-to-play card are screens of their own rather than panels stacked under
+ * the board, so no screen has to hold everything at once.
  */
 import { type Difficulty } from '../engine/difficulty'
-import { starterGrid, STARTER_DIFFICULTY } from '../engine/starter'
-import { CellKind, type Grid } from '../engine/types'
-import {
-  dailyDateKey,
-  dailyRequest,
-  previousDateKey,
-  ROLLOVER_NOTE,
-} from '../features/daily/daily'
+import { CellKind, EMPTY, type Grid } from '../engine/types'
+import { dailyDateKey, dailyRequest, previousDateKey } from '../features/daily/daily'
 import { expireStreak, recordCompletion, recordDaily, type Stats } from '../features/stats/stats'
 import { applyTheme, type ThemeChoice } from '../features/theme/theme'
 import { drawSeed, GenerateClient, type GenerateHandle } from '../game/generate-client'
@@ -26,6 +23,7 @@ import {
   saveBoard,
   saveSettings,
   saveStats,
+  type LoadedBoard,
   type Settings,
   type Slot,
   type StorageLike,
@@ -36,16 +34,16 @@ import {
   enter,
   isEditable,
   redo,
-  remainingCells,
   undo,
   type GameState,
 } from '../game/state'
 import { bindTimerToVisibility, createTimer, type Timer } from '../game/timer'
 import { createBoardView, type BoardView } from './board/board'
 import { createControlsView } from './controls/controls'
+import { createHomeView, type ResumeSummary } from './home/home'
 import { createKeypadView } from './keypad/keypad'
-import { createMenuView } from './menu/menu'
 import { createOnboardingView } from './onboarding/onboarding'
+import { createRouter, type Screen } from './router'
 import { createSettingsView } from './settings/settings-view'
 import { createStatsView } from './stats/stats-view'
 
@@ -70,7 +68,6 @@ interface Session {
   readonly timer: Timer
   readonly dateKey: string | null
   readonly dispose: () => void
-  /** True once the completion has been counted, so it counts only once. */
   recorded: boolean
 }
 
@@ -82,18 +79,29 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   const themeRoot = options.themeRoot ?? document.documentElement
   const confirmDiscard = options.confirmDiscard ?? ((message: string) => window.confirm(message))
   const client = options.client ?? new GenerateClient()
+  const router = createRouter('home')
 
   let settings: Settings = loadSettings(storage)
   let stats: Stats = loadStats(storage)
   applyTheme(settings.theme, themeRoot)
 
+  // ---- chrome ----------------------------------------------------------------
+
   const header = document.createElement('header')
   header.className = 'header'
+
+  const backButton = document.createElement('button')
+  backButton.type = 'button'
+  backButton.className = 'button header__back'
+  backButton.textContent = 'Menu'
+  backButton.setAttribute('aria-label', 'Back to the menu')
+  backButton.addEventListener('click', () => leaveScreen())
+
   const title = document.createElement('h1')
   title.textContent = 'MathsCross'
-  const difficultyLabel = document.createElement('span')
-  difficultyLabel.className = 'header__difficulty'
-  header.append(title, difficultyLabel)
+  const subtitle = document.createElement('span')
+  subtitle.className = 'header__difficulty'
+  header.append(backButton, title, subtitle)
 
   const status = document.createElement('p')
   status.className = 'status'
@@ -104,9 +112,6 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   updateBanner.className = 'banner'
   updateBanner.hidden = true
 
-  const layout = document.createElement('div')
-  layout.className = 'layout'
-
   const generating = document.createElement('div')
   generating.className = 'generating'
   generating.hidden = true
@@ -115,88 +120,188 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   cancelButton.type = 'button'
   cancelButton.className = 'button'
   cancelButton.textContent = 'Cancel'
+  cancelButton.addEventListener('click', () => pending?.cancel())
   generating.append(generatingText, cancelButton)
 
   const footer = document.createElement('p')
   footer.className = 'status status--version'
   footer.textContent = `Version ${options.version}`
 
-  const onboarding = createOnboardingView({
-    onDismiss: () => {
-      settings = { ...settings, onboardingDismissed: true }
-      saveSettings(settings, storage)
-    },
+  // ---- screens ---------------------------------------------------------------
+
+  const home = createHomeView({
+    onContinue: (slot) => resume(slot),
+    onNew: (difficulty) => newPuzzle(difficulty),
+    onDaily: () => startDaily(),
+    onStats: () => router.go('stats'),
+    onSettings: () => router.go('settings'),
+    onHowToPlay: () => router.go('howtoplay'),
   })
 
-  const dailyButton = document.createElement('button')
-  dailyButton.type = 'button'
-  dailyButton.className = 'button'
-  dailyButton.textContent = 'Daily'
-  dailyButton.title = ROLLOVER_NOTE
-  dailyButton.addEventListener('click', () => startDaily())
+  const gameScreen = document.createElement('section')
+  gameScreen.className = 'screen screen--game'
+  const layout = document.createElement('div')
+  layout.className = 'layout'
+  gameScreen.append(layout)
 
-  const menu = createMenuView({ onChoose: (difficulty) => newPuzzle(difficulty) })
-  menu.element.append(dailyButton)
-
+  const statsScreen = document.createElement('section')
+  statsScreen.className = 'screen screen--stats'
   const statsView = createStatsView()
+  statsScreen.append(sectionHeading('Statistics'), statsView.element)
+
+  const settingsScreen = document.createElement('section')
+  settingsScreen.className = 'screen screen--settings'
   const settingsView = createSettingsView({
     initial: settings.theme,
     onChoose: (theme) => setTheme(theme),
   })
+  settingsScreen.append(sectionHeading('Settings'), settingsView.element)
 
-  mount.append(
-    header,
-    menu.element,
-    onboarding.element,
-    updateBanner,
-    generating,
-    status,
-    layout,
-    statsView.element,
-    settingsView.element,
-    footer,
-  )
+  const howToPlayScreen = document.createElement('section')
+  howToPlayScreen.className = 'screen screen--howtoplay'
+  const onboarding = createOnboardingView({
+    onDismiss: () => {
+      settings = { ...settings, onboardingDismissed: true }
+      saveSettings(settings, storage)
+      router.reset('home')
+    },
+  })
+  howToPlayScreen.append(onboarding.element)
+
+  const screens: Readonly<Record<Screen, HTMLElement>> = {
+    home: home.element,
+    game: gameScreen,
+    stats: statsScreen,
+    settings: settingsScreen,
+    howtoplay: howToPlayScreen,
+  }
+
+  mount.append(header, updateBanner, generating, status, ...Object.values(screens), footer)
+
+  // ---- state -----------------------------------------------------------------
 
   let session: Session | null = null
   let pending: GenerateHandle | null = null
   let noticeTimer: number | null = null
   let lastAnnouncement = ''
 
+  router.onChange((screen) => showScreen(screen))
+
   // A lapsed streak is zeroed when the app opens, because nothing runs on the day
   // a player does not open it. Plan section 7.4.
-  const today = now()
-  stats = expireStreak(stats, dailyDateKey(today), previousDateKey(today))
+  const opened = now()
+  stats = expireStreak(stats, dailyDateKey(opened), previousDateKey(opened))
   saveStats(stats, storage)
 
-  resumeOrStart()
-  statsView.render(stats)
-
-  if (!settings.onboardingDismissed) {
+  // A first-time player is taken to the how-to-play screen rather than having a
+  // card appear over the menu. Everyone else lands on home.
+  if (settings.onboardingDismissed) {
+    router.reset('home')
+    showScreen('home')
+  } else {
     onboarding.show()
+    router.reset('howtoplay')
+    showScreen('howtoplay')
+  }
+
+  // ---- screen plumbing -------------------------------------------------------
+
+  function showScreen(screen: Screen): void {
+    for (const [name, element] of Object.entries(screens)) {
+      element.hidden = name !== screen
+    }
+    // Only screens above home need a way back, and only the game screen has
+    // per-move status worth announcing.
+    backButton.hidden = screen === 'home'
+    status.hidden = screen !== 'game'
+    if (screen !== 'game') {
+      subtitle.textContent = ''
+    }
+    if (screen === 'home') {
+      refreshHome()
+    }
+    if (screen === 'stats') {
+      statsView.render(stats)
+    }
   }
 
   /**
-   * Restores whatever was in progress, or falls back to the bundled board.
+   * Leaves the current screen.
    *
-   * Free play is preferred over the daily on load: it is the slot a player is most
-   * likely to have been in, and the daily is one tap away.
+   * A game is left rather than abandoned: it is saved on every entry already, so
+   * walking away and coming back is the same as never leaving.
    */
-  function resumeOrStart(): void {
+  function leaveScreen(): void {
+    if (!router.back()) {
+      router.reset('home')
+      showScreen('home')
+    }
+  }
+
+  function refreshHome(): void {
     const free = loadBoard('free', storage)
-    if (free !== null) {
-      start('free', free.puzzle, free.difficulty, free.difficulty, null, free)
-      menu.setCurrent(free.difficulty)
-      return
-    }
-
     const daily = loadBoard('daily', storage)
-    if (daily !== null && daily.dateKey === dailyDateKey(now())) {
-      start('daily', daily.puzzle, daily.difficulty, 'Daily', daily.dateKey, daily)
+    const todayKey = dailyDateKey(now())
+
+    home.setResume(
+      free === null ? null : summarise(free, free.difficulty),
+      daily === null || daily.dateKey !== todayKey ? null : summarise(daily, 'daily'),
+    )
+
+    const { currentStreak } = stats.daily
+    home.setStreak(
+      currentStreak > 0
+        ? `Daily streak: ${currentStreak} ${currentStreak === 1 ? 'day' : 'days'}.`
+        : null,
+    )
+  }
+
+  function summarise(board: LoadedBoard, label: string): ResumeSummary {
+    return { label, elapsedMs: board.elapsedMs, remaining: countBlanks(board, true) }
+  }
+
+  /** Blanks in a stored board: all of them, or only those still unfilled. */
+  function countBlanks(board: LoadedBoard, unfilledOnly: boolean): number {
+    let count = 0
+    for (let cell = 0; cell < board.puzzle.kinds.length; cell += 1) {
+      const kind = board.puzzle.kinds[cell]
+      const editable =
+        (kind === CellKind.Digit || kind === CellKind.Operator) &&
+        board.puzzle.values[cell] === EMPTY
+      if (!editable) {
+        continue
+      }
+      if (!unfilledOnly || board.board.values[cell] === EMPTY) {
+        count += 1
+      }
+    }
+    return count
+  }
+
+  // ---- sessions --------------------------------------------------------------
+
+  function resume(slot: Slot): void {
+    const held = loadBoard(slot, storage)
+    if (held === null) {
+      refreshHome()
       return
     }
-
-    start('free', starterGrid(), STARTER_DIFFICULTY, 'Starter puzzle', null)
-    menu.setCurrent(STARTER_DIFFICULTY)
+    if (slot === 'daily' && held.dateKey !== dailyDateKey(now())) {
+      // Expired overnight. Say so rather than letting it vanish. Plan 7.4.
+      clearBoard('daily', storage)
+      refreshHome()
+      status.hidden = false
+      status.textContent = 'That daily has expired. Start today’s from the menu.'
+      return
+    }
+    start(
+      slot,
+      held.puzzle,
+      held.difficulty,
+      slot === 'daily' ? 'Daily' : held.difficulty,
+      held.dateKey,
+      held,
+    )
   }
 
   function start(
@@ -205,7 +310,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     difficulty: Difficulty,
     label: string,
     dateKey: string | null,
-    restored?: { board: Grid; elapsedMs: number; history: GameState['history']; historyIndex: number },
+    restored?: LoadedBoard,
   ): void {
     session?.dispose()
 
@@ -225,7 +330,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     const detachVisibility = bindTimerToVisibility(timer)
 
     const board = createBoardView(state, {
-      onSelect: (cell) => showPadFor(state, cell),
+      onSelect: (cell) => showPadFor(cell),
       onType: (cell, value) => apply(cell, value),
       onClear: (cell) => {
         if (clearCell(state, cell) === 'applied') {
@@ -257,7 +362,6 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     const tick = window.setInterval(() => controls.render(), CLOCK_TICK_MS)
 
     layout.replaceChildren(board.element, keypad.element, controls.element)
-    difficultyLabel.textContent = label
 
     session = {
       slot,
@@ -273,11 +377,21 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       },
     }
 
+    // Home stays under the game, so leaving the board returns to the menu rather
+    // than to whatever screen launched it.
+    router.reset('home')
+    router.go('game')
+    showScreen('game')
+
+    // After navigating, not before: the reset above shows home on its way past,
+    // and `showScreen` clears the subtitle for every screen that is not the game.
+    subtitle.textContent = label
+
     const focused = board.focused
     if (focused === null) {
       keypad.showFor(undefined, false)
     } else {
-      showPadFor(state, focused)
+      showPadFor(focused)
     }
     refresh()
 
@@ -286,7 +400,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
         return
       }
       board.focus(cell)
-      showPadFor(state, cell)
+      showPadFor(cell)
       refresh()
     }
 
@@ -297,8 +411,8 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       refresh()
     }
 
-    function showPadFor(current: GameState, cell: number): void {
-      keypad.showFor(current.board.kinds[cell], isSignCell(current, cell))
+    function showPadFor(cell: number): void {
+      keypad.showFor(state.board.kinds[cell], isSignCell(state, cell))
     }
 
     function refresh(): void {
@@ -333,68 +447,58 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   function recordSolve(active: Session): void {
     stats = recordCompletion(stats, active.state.difficulty, active.timer.elapsed())
     if (active.slot === 'daily' && active.dateKey !== null) {
-      const date = now()
-      stats = recordDaily(stats, active.dateKey, previousDateKey(date))
+      stats = recordDaily(stats, active.dateKey, previousDateKey(now()))
     }
     saveStats(stats, storage)
     statsView.render(stats)
     clearBoard(active.slot, storage)
   }
 
+  // ---- generation ------------------------------------------------------------
+
   function newPuzzle(difficulty: Difficulty): void {
-    if (pending !== null || !confirmIfInProgress()) {
+    if (pending !== null || !confirmIfInProgress('free')) {
       return
     }
     request(drawSeed(), difficulty, 'free', difficulty, null)
   }
 
-  /**
-   * Starts or resumes today's daily.
-   *
-   * A daily already in the slot for today is resumed rather than regenerated, which
-   * is what makes a player's daily immune to a later generator change. Plan 5.7.
-   */
   function startDaily(): void {
     if (pending !== null) {
       return
     }
-    const request_ = dailyRequest(now())
+    const wanted = dailyRequest(now())
     const held = loadBoard('daily', storage)
 
-    if (held !== null && held.dateKey === request_.dateKey) {
-      if (!confirmIfInProgress()) {
-        return
-      }
-      start('daily', held.puzzle, held.difficulty, 'Daily', held.dateKey, held)
-      menu.setCurrent(null)
+    // Today's daily is resumed rather than regenerated. That is what makes a
+    // player's daily immune to a later generator change. Plan section 5.7.
+    if (held !== null && held.dateKey === wanted.dateKey) {
+      resume('daily')
       return
     }
 
-    // A daily from an earlier date has expired. Say so rather than letting a
-    // half-finished board vanish without explanation. Plan section 7.4.
-    if (held !== null && held.dateKey !== request_.dateKey) {
+    if (held !== null) {
       clearBoard('daily', storage)
-      status.textContent = 'Yesterday’s daily has expired. Here is today’s.'
-      lastAnnouncement = status.textContent
     }
-
-    if (!confirmIfInProgress()) {
-      return
-    }
-    request(request_.seed, request_.difficulty, 'daily', 'Daily', request_.dateKey)
+    request(wanted.seed, wanted.difficulty, 'daily', 'Daily', wanted.dateKey)
   }
 
-  function confirmIfInProgress(): boolean {
-    if (session === null) {
+  /**
+   * Asks before replacing a board in the slot about to be written.
+   *
+   * Only that slot: starting free play must never prompt about the daily, because
+   * it does not touch it. A finished puzzle is not work in progress, and neither is
+   * an untouched one — confirming either is friction for its own sake.
+   */
+  function confirmIfInProgress(slot: Slot): boolean {
+    const held = loadBoard(slot, storage)
+    if (held === null) {
       return true
     }
-    // A finished puzzle is not work in progress. Asking "the one you are working on
-    // will be lost" after the player has solved it is both wrong and irritating,
-    // and `recorded` is already the flag for "this one is done".
-    if (session.recorded) {
+    if (session !== null && session.slot === slot && session.recorded) {
       return true
     }
-    if (!hasProgress(session.state)) {
+    if (countBlanks(held, true) >= countBlanks(held, false)) {
       return true
     }
     return confirmDiscard('Start a new puzzle? The one you are working on will be lost.')
@@ -407,9 +511,11 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     label: string,
     dateKey: string | null,
   ): void {
-    menu.setBusy(true)
+    home.setBusy(true)
     lastAnnouncement = ''
 
+    // Only announce after a delay. Easy generates in single-digit milliseconds, so
+    // flashing a notice for one frame would be noise rather than information.
     noticeTimer = window.setTimeout(() => {
       generatingText.textContent = 'Making a puzzle…'
       generating.hidden = false
@@ -426,20 +532,18 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       finishGenerating()
 
       if (!outcome.ok) {
+        status.hidden = false
         status.textContent =
           outcome.reason === 'cancelled'
-            ? 'Cancelled. Your puzzle is untouched.'
+            ? 'Cancelled. Nothing was changed.'
             : 'Could not make a puzzle this time. Please try again.'
         lastAnnouncement = status.textContent
         return
       }
 
       start(slot, outcome.puzzle.grid, difficulty, label, dateKey)
-      menu.setCurrent(slot === 'free' ? difficulty : null)
     })
   }
-
-  cancelButton.addEventListener('click', () => pending?.cancel())
 
   function finishGenerating(): void {
     if (noticeTimer !== null) {
@@ -447,24 +551,16 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       noticeTimer = null
     }
     generating.hidden = true
-    menu.setBusy(false)
+    home.setBusy(false)
     pending = null
   }
+
+  // ---- odds and ends ---------------------------------------------------------
 
   function setTheme(theme: ThemeChoice): void {
     settings = { ...settings, theme }
     saveSettings(settings, storage)
     applyTheme(theme, themeRoot)
-  }
-
-  function hasProgress(state: GameState): boolean {
-    let blanks = 0
-    for (let cell = 0; cell < state.puzzle.kinds.length; cell += 1) {
-      if (isEditable(state, cell)) {
-        blanks += 1
-      }
-    }
-    return remainingCells(state).length < blanks
   }
 
   function announce(board: BoardView): void {
@@ -499,8 +595,27 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     return false
   }
 
-  /** Shows the update prompt. Exported behaviour, wired by `main.ts`. */
+  function sectionHeading(text: string): HTMLElement {
+    const element = document.createElement('h2')
+    element.className = 'screen__heading'
+    element.textContent = text
+    return element
+  }
+
+  /**
+   * Hooks the shell drives from outside.
+   *
+   * `mathscrossBack` is what the Android hardware back button calls: back must
+   * leave the current screen and exit the app only from home. Plan section 8.6.
+   */
   Object.assign(mount, {
+    mathscrossBack: (): boolean => {
+      if (router.current === 'home') {
+        return false
+      }
+      leaveScreen()
+      return true
+    },
     mathscrossShowUpdate: (apply: () => Promise<void>): void => {
       updateBanner.replaceChildren()
       const text = document.createElement('span')

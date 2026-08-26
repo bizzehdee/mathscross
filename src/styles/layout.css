@@ -463,3 +463,65 @@ body {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+
+/* Screens. One shows at a time; the router sets `hidden` on the rest. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.screen__heading {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.header__back {
+  font-size: 0.85rem;
+  padding: 0 var(--space-2);
+}
+
+/* Home */
+
+.screen--home {
+  align-items: stretch;
+  max-width: 28rem;
+  width: 100%;
+  align-self: center;
+  gap: var(--space-4);
+}
+
+.home__streak {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--colour-group);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.home__group {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.home__group .button {
+  flex: 1 1 7rem;
+}
+
+/* The primary actions carry the accent, so continuing is the obvious default when
+   there is something to continue. */
+.button--primary {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-surface-raised);
+  font-weight: 600;
+}
+
+.home__group--nav {
+  border-top: 1px solid var(--colour-line);
+  padding-top: var(--space-3);
+}

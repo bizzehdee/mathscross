@@ -437,11 +437,14 @@ in the same places.
     ui/
       app.ts
       platform.ts             # native detection, service worker gating
+      router.ts               # which screen is showing, section 8.9
+      home/                   # the start screen
       board/
       keypad/                 # numeric pad and operator pad
       controls/               # undo, redo, timer display
-      onboarding/             # first-run explainer, section 8.7
-      menu/
+      onboarding/             # the how-to-play screen, section 8.7
+      stats/
+      settings/
       install/
       haptics.ts
   native/
@@ -1174,6 +1177,38 @@ building it correctly costs while the board is being written.
   channel: a glyph, or an underline weight, alongside the hue. Red and green is
   exactly the encoding that fails most often, and this is a three-state distinction.
 - Verify the contrast theme covers the accent change from section 8.1.
+
+### 8.9 Screens
+
+Five screens, one showing at a time: **home**, **game**, **stats**, **settings** and
+**how to play**.
+
+**The app opens on home, not on a board.** A player arriving wants to choose what to
+do — carry on, start something new, look at their statistics — and a board that
+appears unbidden answers a question nobody asked. Home carries the primary actions
+and nothing else: continue, new puzzle, daily, and the way to the other screens.
+
+**Statistics and settings are screens, not panels.** An earlier draft stacked them
+under the board on one page, which made the playing screen carry everything at once
+and buried the board under things a player looks at rarely.
+
+Navigation is a stack with home as the floor, in `ui/router.ts`. Deliberately not a
+URL router: the app has no shareable locations, and history entries would give a
+player a back trail to walk through. The floor is what lets the Android hardware
+back button distinguish "leave this screen" from "exit the app", which section 8.6
+requires.
+
+Two details that are easy to get wrong:
+
+- **A game is left, not abandoned.** The board is saved on every entry, so walking
+  away and returning is the same as never leaving. Leaving the game returns to home
+  rather than to whichever screen launched it.
+- **Starting a game resets the stack through home**, so anything the transition
+  clears — the header subtitle, for one — must be set *after* navigating rather than
+  before.
+
+A first-time player lands on how to play rather than having a card appear over the
+menu, and can return to it from home at any time.
 
 ## 9. Cordova and Android
 

@@ -47,10 +47,9 @@ export function createOnboardingView(callbacks: OnboardingCallbacks): Onboarding
   dismiss.type = 'button'
   dismiss.className = 'button'
   dismiss.textContent = 'Got it'
-  dismiss.addEventListener('click', () => {
-    hide()
-    callbacks.onDismiss()
-  })
+  // Does not hide itself. It is a screen now, and the router decides what shows,
+  // so hiding here would leave the router pointing at an empty screen.
+  dismiss.addEventListener('click', () => callbacks.onDismiss())
 
   element.append(title, body, example, dismiss)
 

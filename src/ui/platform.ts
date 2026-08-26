@@ -32,3 +32,32 @@ export function whenPlatformReady(): Promise<void> {
     document.addEventListener('deviceready', () => resolve(), { once: true })
   })
 }
+
+/**
+ * Routes the Android hardware back button through a handler.
+ *
+ * Cordova fires `backbutton` on the document once `deviceready` has run, and
+ * overriding it means the app decides what back does. Returning false from the
+ * handler means "nothing left to leave", at which point the app should exit —
+ * which is the one case where the default behaviour is right.
+ *
+ * Plan section 8.6: back leaves the current screen, and exits only from home.
+ */
+export function bindBackButton(handle: () => boolean): () => void {
+  if (!isNativeShell()) {
+    return () => {}
+  }
+
+  const onBack = (): void => {
+    if (handle()) {
+      return
+    }
+    const exit = (
+      globalThis as unknown as { navigator?: { app?: { exitApp?: () => void } } }
+    ).navigator?.app?.exitApp
+    exit?.()
+  }
+
+  document.addEventListener('backbutton', onBack)
+  return () => document.removeEventListener('backbutton', onBack)
+}

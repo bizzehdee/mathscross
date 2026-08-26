@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The integration test plan section 13.7 requires: drive a puzzle to completion
- * through the DOM.
+ * The application shell: screens, navigation, and a puzzle driven to completion
+ * through the DOM. Plan section 13.7.
  *
  * The real `GenerateClient` is not used. It spawns a Worker, which jsdom has no
- * implementation for, and the point here is the playing screen rather than
- * generation — which the engine suite already covers thoroughly. A stub stands in.
+ * implementation for, and what is under test here is the shell rather than
+ * generation — which the engine suite covers thoroughly.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parametersFor } from '../engine/difficulty'
@@ -13,15 +13,14 @@ import { solve } from '../engine/solver'
 import { STARTER_DIFFICULTY, starterGrid } from '../engine/starter'
 import { CellKind, EMPTY } from '../engine/types'
 import { loadStats, type StorageLike } from '../game/persist'
-import { mountApp } from './app'
+import { mountApp, type AppOptions } from './app'
 
 /**
  * A fresh in-memory storage per test.
  *
- * The app resumes from storage now, and jsdom's localStorage is shared across every
- * test in a file — so without this, one test's half-finished board is restored into
- * the next and the assertions drift. Injecting it also fixes "today", which the
- * daily depends on.
+ * jsdom's localStorage is shared across every test in a file, so without this one
+ * test's half-finished board is restored into the next. Fixing "today" matters for
+ * the same reason: the daily depends on it.
  */
 function memoryStorage(): StorageLike {
   const data = new Map<string, string>()
@@ -36,9 +35,49 @@ function memoryStorage(): StorageLike {
   }
 }
 
+/** 2026-08-26 is a Wednesday, so the daily is Medium. */
 const TODAY = new Date('2026-08-26T12:00:00Z')
 
-function mount(overrides: Partial<Parameters<typeof mountApp>[1]> = {}): HTMLElement {
+function never(): { puzzle: Promise<never>; cancel: () => void } {
+  return { puzzle: new Promise<never>(() => {}), cancel: () => {} }
+}
+
+/** A client that resolves immediately with the bundled starter board. */
+function starterClient(counter?: { requests: number }): NonNullable<AppOptions['client']> {
+  return {
+    request: (seed, difficulty) => {
+      if (counter !== undefined) {
+        counter.requests += 1
+      }
+      return {
+        puzzle: Promise.resolve({
+          ok: true as const,
+          puzzle: {
+            seed,
+            difficulty,
+            generatorVersion: 1,
+            grid: starterGrid(),
+            density: {
+              digitsMasked: 3,
+              digitsTotal: 7,
+              digitRatio: 0.43,
+              digitTarget: 0.4,
+              operatorsMasked: 0,
+              operatorsTotal: 3,
+              operatorRatio: 0,
+              operatorTarget: 0,
+              uniquenessChecks: 3,
+            },
+            attempts: 1,
+          },
+        }),
+        cancel: () => {},
+      }
+    },
+  }
+}
+
+function mount(overrides: Partial<AppOptions> = {}): HTMLElement {
   const root = document.createElement('div')
   root.id = 'app'
   document.body.replaceChildren(root)
@@ -53,22 +92,49 @@ function mount(overrides: Partial<Parameters<typeof mountApp>[1]> = {}): HTMLEle
   return root
 }
 
-/** Difficulty buttons only, excluding the Daily button they share a group with. */
-function difficultyButtons(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>('.menu [data-difficulty]')]
+/**
+ * Mounts with onboarding already dismissed, which is the ordinary case.
+ *
+ * Seeds settings only when there are none. Writing them unconditionally clobbered
+ * whatever the app had just saved, which made a remount look as though a setting
+ * had not persisted.
+ */
+function mountReady(overrides: Partial<AppOptions> = {}): HTMLElement {
+  const storage = overrides.storage ?? memoryStorage()
+  if (storage.getItem('mathscross.settings.v1') === null) {
+    storage.setItem(
+      'mathscross.settings.v1',
+      JSON.stringify({ v: 1, theme: 'system', onboardingDismissed: true }),
+    )
+  }
+  return mount({ ...overrides, storage })
 }
 
-/** A request that never settles. Nothing in these tests starts a new game. */
-function never(): { puzzle: Promise<never>; cancel: () => void } {
-  return { puzzle: new Promise<never>(() => {}), cancel: () => {} }
+function visibleScreen(root: HTMLElement): string {
+  const shown = [...root.querySelectorAll<HTMLElement>('.screen')].find((screen) => !screen.hidden)
+  return shown?.className.replace('screen screen--', '') ?? 'none'
 }
 
-function cells(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>('[data-cell]')]
+function button(root: HTMLElement, label: string): HTMLElement {
+  const found = [...root.querySelectorAll<HTMLElement>('button')].find(
+    (element) => element.textContent === label,
+  )
+  if (found === undefined) {
+    throw new Error(`No button labelled ${label}`)
+  }
+  return found
 }
 
 function editable(root: HTMLElement): HTMLElement[] {
-  return cells(root).filter((cell) => cell.getAttribute('data-editable') === 'true')
+  return [...root.querySelectorAll<HTMLElement>('[data-editable="true"]')]
+}
+
+function cellAt(root: HTMLElement, index: number): HTMLElement {
+  const cell = root.querySelector<HTMLElement>(`[data-cell="${index}"]`)
+  if (cell === null) {
+    throw new Error(`No cell ${index}`)
+  }
+  return cell
 }
 
 function keypadDigit(root: HTMLElement, digit: number): HTMLElement {
@@ -79,162 +145,7 @@ function keypadDigit(root: HTMLElement, digit: number): HTMLElement {
   return key
 }
 
-beforeEach(() => {
-  document.body.replaceChildren()
-})
-
-describe('the first launch', () => {
-  it('shows a board immediately, with no wait', () => {
-    // Plan section 5.8: on a fresh install nothing is cached, so the bundled
-    // starter board is what stops a new player watching a spinner at exactly the
-    // moment they decide whether to keep the app.
-    const root = mount()
-
-    expect(root.querySelector('[role="grid"]')).not.toBeNull()
-    expect(editable(root).length).toBeGreaterThan(0)
-  })
-
-  it('shows the onboarding card, whose subject is multi-cell numbers', () => {
-    // Not arithmetic. The game uses ordinary BODMAS, so there is nothing to teach
-    // there, and saying the normal rules apply invites a hunt for a catch.
-    // Plan section 8.7.
-    const root = mount()
-    const card = root.querySelector<HTMLElement>('.onboarding')
-
-    expect(card?.hidden).toBe(false)
-    expect(card?.textContent).toContain('one number')
-    expect(card?.textContent?.toLowerCase()).not.toContain('bodmas')
-  })
-
-  it('dismisses the card on request', () => {
-    const root = mount()
-    root.querySelector<HTMLElement>('.onboarding .button')?.click()
-
-    expect(root.querySelector<HTMLElement>('.onboarding')?.hidden).toBe(true)
-  })
-
-  it('reports progress rather than nothing', () => {
-    const root = mount()
-    expect(root.querySelector('.status')?.textContent).toMatch(/equations correct/)
-  })
-})
-
-describe('playing a puzzle to completion', () => {
-  it('accepts keypad entry and reaches the solved state', () => {
-    const root = mount()
-    const blanks = editable(root)
-    expect(blanks.length).toBeGreaterThan(0)
-
-    // The starter board is Easy seed 1:
-    //   # # 2 # ?      column 2 reads 2 + 1 = 3, so the blanks resolve
-    //   # # + # -      to a single answer per cell. Solve it the way a player
-    //   # # 1 # 1      would: click a cell, then press a digit.
-    //   # # = # =
-    //   3 + ? = ?
-    for (const [cell, value] of solution()) {
-      cellAt(root, cell).click()
-      keypadDigit(root, value).click()
-    }
-
-    expect(root.querySelector('.status')?.textContent).toContain('Solved')
-  })
-
-  it('marks every equation satisfied once solved', () => {
-    const root = mount()
-    for (const [cell, value] of solution()) {
-      cellAt(root, cell).click()
-      keypadDigit(root, value).click()
-    }
-
-    const markers = [...root.querySelectorAll('[data-equation-state]')]
-    expect(markers.length).toBeGreaterThan(0)
-    for (const marker of markers) {
-      expect(marker.getAttribute('data-equation-state')).toBe('satisfied')
-    }
-  })
-})
-
-describe('undo and redo', () => {
-  it('reverts one entry and restores it', () => {
-    const root = mount()
-    const first = editable(root)[0]
-    const index = Number(first?.getAttribute('data-cell'))
-
-    first?.click()
-    keypadDigit(root, 4).click()
-    expect(cellAt(root, index).textContent).toBe('4')
-
-    undoButton(root).click()
-    expect(cellAt(root, index).textContent).toBe('')
-
-    redoButton(root).click()
-    expect(cellAt(root, index).textContent).toBe('4')
-  })
-
-  it('disables undo before any move, and redo before any undo', () => {
-    const root = mount()
-
-    expect((undoButton(root) as HTMLButtonElement).disabled).toBe(true)
-    expect((redoButton(root) as HTMLButtonElement).disabled).toBe(true)
-  })
-})
-
-describe('the keypad follows the focused cell', () => {
-  it('offers digits for a digit cell and hides operators', () => {
-    const root = mount()
-    const digitCell = editable(root).find(
-      (cell) => cell.getAttribute('data-kind') === 'digit',
-    )
-    digitCell?.click()
-
-    expect(root.querySelector<HTMLElement>('.keypad__pad--digits')?.hidden).toBe(false)
-    expect(root.querySelector<HTMLElement>('.keypad__pad--operators')?.hidden).toBe(true)
-  })
-})
-
-function cellAt(root: HTMLElement, index: number): HTMLElement {
-  const cell = root.querySelector<HTMLElement>(`[data-cell="${index}"]`)
-  if (cell === null) {
-    throw new Error(`No cell ${index}`)
-  }
-  return cell
-}
-
-function undoButton(root: HTMLElement): HTMLElement {
-  const button = [...root.querySelectorAll<HTMLElement>('.controls .button')].find(
-    (element) => element.textContent === 'Undo',
-  )
-  if (button === undefined) {
-    throw new Error('No undo button')
-  }
-  return button
-}
-
-function redoButton(root: HTMLElement): HTMLElement {
-  const button = [...root.querySelectorAll<HTMLElement>('.controls .button')].find(
-    (element) => element.textContent === 'Redo',
-  )
-  if (button === undefined) {
-    throw new Error('No redo button')
-  }
-  return button
-}
-
-/**
- * The answer for each blank, from the engine.
- *
- * An earlier version tried each digit through the UI and kept the one the board
- * did not mark wrong. That does not work: a cell is only marked wrong once its
- * equation is *unsatisfied*, and while other cells are still blank the equation is
- * `incomplete`, so every digit looked acceptable and the first one tried was
- * accepted.
- *
- * Using the solver for the expected values does not weaken the test. What is under
- * test is the playing screen — that clicking a cell and pressing a key writes the
- * value, redraws the board, updates each equation's marker and reaches the solved
- * state. The assertions on `textContent` and `data-equation-state` cover the render
- * path; the engine only supplies what a player would have worked out.
- */
+/** The answers for the bundled starter board, from the engine. */
 function solution(): [number, number][] {
   const grid = starterGrid()
   const parameters = parametersFor(STARTER_DIFFICULTY)
@@ -252,76 +163,301 @@ function solution(): [number, number][] {
   return answers
 }
 
-describe('the difficulty menu', () => {
-  it('offers all three difficulties, describing what each asks', () => {
-    const root = mount()
-    const buttons = difficultyButtons(root)
+function solveThroughUi(root: HTMLElement): void {
+  for (const [cell, value] of solution()) {
+    cellAt(root, cell).click()
+    keypadDigit(root, value).click()
+  }
+}
 
-    expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Medium', 'Hard'])
-    // The label says what the difficulty actually involves, so a player choosing
-    // Hard knows division and hidden operators are coming.
-    expect(buttons[2]?.getAttribute('aria-label')).toContain('every operator hidden')
+beforeEach(() => {
+  document.body.replaceChildren()
+})
+
+describe('the start screen', () => {
+  it('opens on home, not on a board', () => {
+    // A board that appears unbidden answers a question nobody asked.
+    const root = mountReady()
+
+    expect(visibleScreen(root)).toBe('home')
+    expect(root.querySelector('[role="grid"]')).toBeNull()
   })
 
-  it('marks the difficulty in play as pressed', () => {
-    const root = mount()
-    const easy = difficultyButtons(root)[0]
+  it('offers a new puzzle at each difficulty, describing what each asks', () => {
+    const root = mountReady()
+    const difficulties = [...root.querySelectorAll<HTMLElement>('[data-difficulty]')]
 
-    expect(easy?.getAttribute('aria-pressed')).toBe('true')
+    expect(difficulties.map((element) => element.textContent)).toEqual(['Easy', 'Medium', 'Hard'])
+    expect(difficulties[2]?.getAttribute('aria-label')).toContain('every operator hidden')
   })
 
-  it('asks before discarding a part-solved puzzle', () => {
-    // One free-play slot, so a new puzzle replaces the current one. Losing a
-    // half-finished board to a mis-tap would be the most annoying possible bug.
+  it('offers the daily, and says when it rolls over', () => {
+    const daily = mountReady().querySelector<HTMLElement>('[data-daily]')
+    expect(daily?.textContent).toBe('Daily')
+    expect(daily?.title).toContain('midnight UTC')
+  })
+
+  it('offers no continue when nothing is stored', () => {
+    const root = mountReady()
+    expect(root.querySelector<HTMLElement>('.home__group[aria-label="Continue"]')?.hidden).toBe(true)
+  })
+
+  it('hides the back button, since home is the floor', () => {
+    expect(mountReady().querySelector<HTMLElement>('.header__back')?.hidden).toBe(true)
+  })
+})
+
+describe('a first-time player', () => {
+  it('lands on how to play, whose subject is multi-cell numbers', () => {
+    // Not arithmetic: the game uses ordinary BODMAS, so there is nothing to teach
+    // there, and saying the normal rules apply invites a hunt for a catch.
+    const root = mount()
+
+    expect(visibleScreen(root)).toBe('howtoplay')
+    expect(root.textContent).toContain('one number')
+    expect(root.textContent?.toLowerCase()).not.toContain('bodmas')
+  })
+
+  it('goes to home once dismissed, and lands there next time', () => {
+    const storage = memoryStorage()
+    const first = mount({ storage })
+    button(first, 'Got it').click()
+
+    expect(visibleScreen(first)).toBe('home')
+    expect(visibleScreen(mount({ storage }))).toBe('home')
+  })
+
+  it('can reach how to play again from home', () => {
+    const root = mountReady()
+    button(root, 'How to play').click()
+
+    expect(visibleScreen(root)).toBe('howtoplay')
+  })
+})
+
+describe('navigation', () => {
+  it('reaches statistics and settings as their own screens', () => {
+    const root = mountReady()
+
+    button(root, 'Statistics').click()
+    expect(visibleScreen(root)).toBe('stats')
+
+    button(root, 'Menu').click()
+    expect(visibleScreen(root)).toBe('home')
+
+    button(root, 'Settings').click()
+    expect(visibleScreen(root)).toBe('settings')
+  })
+
+  it('shows a back button on every screen above home', () => {
+    const root = mountReady()
+    button(root, 'Statistics').click()
+
+    expect(root.querySelector<HTMLElement>('.header__back')?.hidden).toBe(false)
+  })
+
+  it('routes the hardware back button, and reports when there is nothing to leave', () => {
+    // Back leaves the current screen and exits only from home. Plan section 8.6.
+    const root = mountReady()
+    const back = (root as unknown as Record<string, () => boolean>)['mathscrossBack']
+
+    expect(back?.()).toBe(false)
+
+    button(root, 'Statistics').click()
+    expect(back?.()).toBe(true)
+    expect(visibleScreen(root)).toBe('home')
+  })
+})
+
+describe('starting and playing a puzzle', () => {
+  it('goes to the game screen with a board', async () => {
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    expect(visibleScreen(root)).toBe('game')
+    expect(root.querySelector('[role="grid"]')).not.toBeNull()
+    expect(editable(root).length).toBeGreaterThan(0)
+  })
+
+  it('returns to home from the game, and offers to continue', async () => {
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    editable(root)[0]?.click()
+    keypadDigit(root, 4).click()
+    button(root, 'Menu').click()
+
+    expect(visibleScreen(root)).toBe('home')
+    expect(root.querySelector<HTMLElement>('.home__group[aria-label="Continue"]')?.hidden).toBe(
+      false,
+    )
+    // The label says what would be resumed, so the choice is informed.
+    expect(button(root, 'Continue easy').getAttribute('aria-label')).toContain('cells left')
+  })
+
+  it('reaches the solved state and records one completion', async () => {
+    const storage = memoryStorage()
+    const root = mountReady({ storage, client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+
+    expect(root.querySelector('.status')?.textContent).toContain('Solved')
+    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
+
+    // Re-entering a cell must not count a second completion.
+    const [first, value] = solution()[0] ?? [0, 0]
+    cellAt(root, first).click()
+    keypadDigit(root, (value + 1) % 10).click()
+    keypadDigit(root, value).click()
+    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
+  })
+
+  it('clears the slot on completion, so a solved board is not offered to continue', async () => {
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+    button(root, 'Menu').click()
+
+    expect(root.querySelector<HTMLElement>('.home__group[aria-label="Continue"]')?.hidden).toBe(true)
+  })
+})
+
+describe('resuming', () => {
+  it('restores entries and the undo history', async () => {
+    // The moment a player most needs undo is right after returning to a
+    // half-finished board. Plan section 8.6.
+    const storage = memoryStorage()
+    const first = mountReady({ storage, client: starterClient() })
+    button(first, 'Easy').click()
+    await Promise.resolve()
+
+    const cell = editable(first)[0]
+    const index = cell?.getAttribute('data-cell')
+    cell?.click()
+    keypadDigit(first, 5).click()
+
+    const second = mountReady({ storage, client: starterClient() })
+    button(second, 'Continue easy').click()
+
+    expect(visibleScreen(second)).toBe('game')
+    expect(second.querySelector(`[data-cell="${index}"]`)?.textContent).toBe('5')
+    expect((button(second, 'Undo') as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+describe('the daily', () => {
+  it('resumes today’s daily rather than regenerating it', async () => {
+    // What makes a player's daily immune to a later generator change: once seen,
+    // that board is theirs. Plan section 5.7.
+    const counter = { requests: 0 }
+    const root = mountReady({ client: starterClient(counter) })
+
+    root.querySelector<HTMLElement>('[data-daily]')?.click()
+    await Promise.resolve()
+
+    expect(counter.requests).toBe(1)
+    expect(visibleScreen(root)).toBe('game')
+
+    button(root, 'Menu').click()
+    root.querySelector<HTMLElement>('[data-daily]')?.click()
+    await Promise.resolve()
+
+    expect(counter.requests).toBe(1)
+  })
+
+  it('shows a streak once one exists', () => {
+    const storage = memoryStorage()
+    storage.setItem(
+      'mathscross.stats.v1',
+      JSON.stringify({
+        v: 1,
+        byDifficulty: {},
+        daily: { currentStreak: 4, longestStreak: 4, completed: 4, lastDateKey: '20260825' },
+      }),
+    )
+
+    expect(mountReady({ storage }).querySelector('.home__streak')?.textContent).toContain('4 days')
+  })
+})
+
+describe('discarding', () => {
+  it('asks before replacing a part-solved board', async () => {
     const asked: string[] = []
-    const root = mount({
+    const root = mountReady({
+      client: starterClient(),
       confirmDiscard: (message) => {
         asked.push(message)
         return false
       },
     })
 
-    // Enter something, so there is progress worth protecting.
-    const blank = [...root.querySelectorAll<HTMLElement>('[data-editable="true"]')][0]
-    blank?.click()
-    root.querySelector<HTMLElement>('.keypad__pad--digits [aria-label="Digit 4"]')?.click()
+    button(root, 'Easy').click()
+    await Promise.resolve()
 
-    difficultyButtons(root)[1]?.click()
+    editable(root)[0]?.click()
+    keypadDigit(root, 4).click()
+    button(root, 'Menu').click()
+    button(root, 'Medium').click()
 
     expect(asked).toHaveLength(1)
     expect(asked[0]).toContain('will be lost')
   })
 
-  it('does not ask when nothing has been entered', () => {
+  it('does not ask when nothing has been entered', async () => {
     // Confirming something the player has not invested in is friction for its own
     // sake.
     const asked: string[] = []
-    const root = mount({
+    const root = mountReady({
+      client: starterClient(),
       confirmDiscard: (message) => {
         asked.push(message)
         return false
       },
     })
 
-    difficultyButtons(root)[1]?.click()
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    button(root, 'Menu').click()
+    button(root, 'Medium').click()
+
+    expect(asked).toHaveLength(0)
+  })
+
+  it('does not ask about a board that is already solved', async () => {
+    // Asking to protect work the player has finished is both wrong and irritating.
+    const asked: string[] = []
+    const root = mountReady({
+      client: starterClient(),
+      confirmDiscard: (message) => {
+        asked.push(message)
+        return false
+      },
+    })
+
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    solveThroughUi(root)
+    button(root, 'Menu').click()
+    button(root, 'Medium').click()
 
     expect(asked).toHaveLength(0)
   })
 })
 
 describe('the generating state', () => {
-  it('offers a cancel control while a puzzle is being made', () => {
+  it('offers a cancel control', () => {
     // Plan section 5.6: a player must never face a frozen screen, and must always
     // be able to give up waiting.
-    const root = mount()
     let cancelled = false
-    document.body.replaceChildren(root)
-
-    const withCancel = document.createElement('div')
-    document.body.replaceChildren(withCancel)
-    mountApp(withCancel, {
-      version: 'test',
-      confirmDiscard: () => true,
+    const root = mountReady({
       client: {
         request: () => ({
           puzzle: new Promise<never>(() => {}),
@@ -332,18 +468,14 @@ describe('the generating state', () => {
       },
     })
 
-    difficultyButtons(withCancel)[2]?.click()
-    withCancel.querySelector<HTMLElement>('.generating .button')?.click()
+    button(root, 'Hard').click()
+    button(root, 'Cancel').click()
 
     expect(cancelled).toBe(true)
   })
 
-  it('reports a failed generation without breaking the current puzzle', () => {
-    const root = document.createElement('div')
-    document.body.replaceChildren(root)
-    mountApp(root, {
-      version: 'test',
-      confirmDiscard: () => true,
+  it('reports a failure without leaving the player stranded', async () => {
+    const root = mountReady({
       client: {
         request: () => ({
           puzzle: Promise.resolve({ ok: false as const, reason: 'exhausted' as const }),
@@ -352,139 +484,11 @@ describe('the generating state', () => {
       },
     })
 
-    difficultyButtons(root)[1]?.click()
+    button(root, 'Medium').click()
+    await Promise.resolve()
 
-    return Promise.resolve().then(() => {
-      expect(root.querySelector('.status')?.textContent).toContain('Please try again')
-      // The board is still there and still playable.
-      expect(root.querySelectorAll('[data-editable="true"]').length).toBeGreaterThan(0)
-    })
-  })
-})
-
-describe('resuming', () => {
-  it('restores a board, its entries and its undo history', () => {
-    // The moment a player most needs undo is right after returning to a
-    // half-finished board. Plan section 8.6.
-    const storage = memoryStorage()
-    const first = mount({ storage })
-
-    const blank = [...first.querySelectorAll<HTMLElement>('[data-editable="true"]')][0]
-    const index = blank?.getAttribute('data-cell')
-    blank?.click()
-    first.querySelector<HTMLElement>('.keypad__pad--digits [aria-label="Digit 5"]')?.click()
-
-    const second = mount({ storage })
-
-    expect(second.querySelector(`[data-cell="${index}"]`)?.textContent).toBe('5')
-    expect((undoButton(second) as HTMLButtonElement).disabled).toBe(false)
-  })
-
-  it('falls back to the bundled board when nothing is stored', () => {
-    const root = mount()
-    expect(root.querySelector('.header__difficulty')?.textContent).toBe('Starter puzzle')
-  })
-})
-
-describe('the daily', () => {
-  it('is offered, and says when it rolls over', () => {
-    // UTC rollover means 01:00 local during British Summer Time. A known property
-    // rather than a bug report. Plan section 7.4.
-    const root = mount()
-    const daily = dailyButton(root)
-
-    expect(daily.textContent).toBe('Daily')
-    expect(daily.title).toContain('midnight UTC')
-  })
-
-  it('resumes today’s daily rather than regenerating it', () => {
-    // What makes a player's daily immune to a later generator change: once seen,
-    // that board is theirs. Plan section 5.7.
-    const storage = memoryStorage()
-    let requests = 0
-    const root = mount({
-      storage,
-      client: {
-        request: (seed, difficulty) => {
-          requests += 1
-          return {
-            puzzle: Promise.resolve({
-              ok: true as const,
-              puzzle: {
-                seed,
-                difficulty,
-                generatorVersion: 1,
-                grid: starterGrid(),
-                density: {
-                  digitsMasked: 3,
-                  digitsTotal: 7,
-                  digitRatio: 0.43,
-                  digitTarget: 0.4,
-                  operatorsMasked: 0,
-                  operatorsTotal: 3,
-                  operatorRatio: 0,
-                  operatorTarget: 0,
-                  uniquenessChecks: 3,
-                },
-                attempts: 1,
-              },
-            }),
-            cancel: () => {},
-          }
-        },
-      },
-    })
-
-    dailyButton(root).click()
-
-    return Promise.resolve()
-      .then(() => {
-        expect(requests).toBe(1)
-        expect(root.querySelector('.header__difficulty')?.textContent).toBe('Daily')
-        // Asking again resumes from the slot instead of generating.
-        dailyButton(root).click()
-        return Promise.resolve()
-      })
-      .then(() => {
-        expect(requests).toBe(1)
-      })
-  })
-})
-
-describe('completing a puzzle', () => {
-  it('records it in the statistics, once', () => {
-    const storage = memoryStorage()
-    const root = mount({ storage })
-
-    for (const [cell, value] of solution()) {
-      cellAt(root, cell).click()
-      keypadDigit(root, value).click()
-    }
-
-    expect(root.querySelector('.stats__daily')?.textContent).toContain('No daily puzzles')
-    const easyRow = root.querySelector('.stats__row')
-    expect(easyRow?.textContent).toContain('easy')
-    // One completion, and clearing then refilling a cell must not add another.
-    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
-
-    const [firstCell, firstValue] = solution()[0] ?? [0, 0]
-    cellAt(root, firstCell).click()
-    keypadDigit(root, (firstValue + 1) % 10).click()
-    keypadDigit(root, firstValue).click()
-
-    expect(loadStats(storage).byDifficulty.easy.completed).toBe(1)
-  })
-
-  it('clears the slot, so a solved board is not resumed', () => {
-    const storage = memoryStorage()
-    const root = mount({ storage })
-    for (const [cell, value] of solution()) {
-      cellAt(root, cell).click()
-      keypadDigit(root, value).click()
-    }
-
-    const again = mount({ storage })
-    expect(again.querySelector('.header__difficulty')?.textContent).toBe('Starter puzzle')
+    expect(root.querySelector('.status')?.textContent).toContain('Please try again')
+    expect(visibleScreen(root)).toBe('home')
   })
 })
 
@@ -492,13 +496,14 @@ describe('theme', () => {
   it('applies and remembers a choice', () => {
     const storage = memoryStorage()
     const themeRoot = document.createElement('div')
-    const root = mount({ storage, themeRoot })
+    const root = mountReady({ storage, themeRoot })
 
-    themeButton(root, 'Dark').click()
+    button(root, 'Settings').click()
+    button(root, 'Dark').click()
     expect(themeRoot.getAttribute('data-theme')).toBe('dark')
 
     const again = document.createElement('div')
-    mount({ storage, themeRoot: again })
+    mountReady({ storage, themeRoot: again })
     expect(again.getAttribute('data-theme')).toBe('dark')
   })
 
@@ -506,31 +511,33 @@ describe('theme', () => {
     // data-theme="system" matches no rule in tokens.css and would silently give
     // the light palette on a device set to dark. Plan section 8.1.
     const themeRoot = document.createElement('div')
-    const root = mount({ themeRoot })
+    const root = mountReady({ themeRoot })
 
-    themeButton(root, 'Dark').click()
-    themeButton(root, 'System').click()
+    button(root, 'Settings').click()
+    button(root, 'Dark').click()
+    button(root, 'System').click()
 
     expect(themeRoot.hasAttribute('data-theme')).toBe(false)
   })
 })
 
-function dailyButton(root: HTMLElement): HTMLElement {
-  const button = [...root.querySelectorAll<HTMLElement>('.menu .button')].find(
-    (element) => element.textContent === 'Daily',
-  )
-  if (button === undefined) {
-    throw new Error('No daily button')
-  }
-  return button
-}
+describe('the game screen header', () => {
+  it('names the difficulty in play', async () => {
+    // Set after navigation, not before: starting a game resets the router through
+    // home on its way to the game screen, and that transition clears the subtitle.
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
 
-function themeButton(root: HTMLElement, label: string): HTMLElement {
-  const button = [...root.querySelectorAll<HTMLElement>('.settings__themes .button')].find(
-    (element) => element.textContent === label,
-  )
-  if (button === undefined) {
-    throw new Error(`No theme button ${label}`)
-  }
-  return button
-}
+    expect(root.querySelector('.header__difficulty')?.textContent).toBe('easy')
+  })
+
+  it('clears it when leaving the game', async () => {
+    const root = mountReady({ client: starterClient() })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+    button(root, 'Menu').click()
+
+    expect(root.querySelector('.header__difficulty')?.textContent).toBe('')
+  })
+})

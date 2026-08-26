@@ -1,6 +1,6 @@
 import { mountApp } from './ui/app'
 import { registerServiceWorker } from './ui/install/service-worker'
-import { appVersion, isNativeShell, whenPlatformReady } from './ui/platform'
+import { appVersion, bindBackButton, isNativeShell, whenPlatformReady } from './ui/platform'
 
 const app = document.querySelector<HTMLDivElement>('#app')
 
@@ -12,6 +12,12 @@ if (app === null) {
 // network outranks update freshness.
 void whenPlatformReady().then(() => {
   mountApp(app, { version: appVersion() })
+
+  // Back leaves the current screen, and exits only from home. Plan section 8.6.
+  bindBackButton(() => {
+    const back = (app as unknown as Record<string, unknown>)['mathscrossBack']
+    return typeof back === 'function' ? (back as () => boolean)() : false
+  })
 
   if (isNativeShell()) {
     return
