@@ -56,6 +56,11 @@ true on one machine only. See
   deploy is rejected until the `github-pages` environment gets a tag rule, and the
   error blames the tag rather than the setting. Read before pushing the first `v*`
   tag.
+- [step-env-is-not-visible-to-its-own-if.md](step-env-is-not-visible-to-its-own-if.md)
+  — a step's own `env` block is applied after its `if` is evaluated, so gating a
+  step on a secret lifted into its own `env` reads false forever and the release
+  goes green while publishing nothing. Read before gating any step on a secret, or
+  when a release succeeds but the store version does not change.
 - [play-app-signing.md](play-app-signing.md) — "Releases are signed by Google Play"
   does not remove the need for an upload key, the console hands back certificates
   rather than private keys, and the APK CI builds is not the one users get. Read
