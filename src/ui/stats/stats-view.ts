@@ -17,14 +17,14 @@ export function createStatsView(): StatsView {
   const element = document.createElement('section')
   element.className = 'stats'
 
-  const heading = document.createElement('h2')
-  heading.textContent = 'Statistics'
+  // No heading here. The screen that hosts this provides one, and two identical
+  // headings in a row reads as a duplicate to a screen reader.
   const table = document.createElement('div')
   table.className = 'stats__grid'
   const daily = document.createElement('p')
   daily.className = 'stats__daily'
 
-  element.append(heading, table, daily)
+  element.append(table, daily)
 
   return {
     element,

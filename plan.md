@@ -1009,6 +1009,18 @@ release 2. Do not ship an unused token; add it back with the feature.
 **Add `--colour-group`.** A grouping colour for multi-cell numbers, per section 8.5.
 Define it in all three palettes.
 
+**Add `--colour-block`.** Block cells carry no value and divide the grid up, and they
+need to be plainly distinct from the cells a player fills. A printed crossword prints
+them solid black on white, and the reason is legibility rather than decoration: the
+*shape* of the puzzle has to be readable at a glance, before any of its content is.
+
+An earlier version used the page surface for them, which left almost no separation
+from a playable cell and made the grid read as a flat rectangle. Dark slate on light,
+near-black on dark — darker than the playable cells in both, so "solid and inert"
+survives the inversion — and white in the contrast theme, which is the same
+convention inverted. They are also squared off and gapless, so a run of them forms
+one shape rather than a row of tiles.
+
 ### 8.2 Layout
 
 Follow `src/styles/layout.css` from the sibling:
@@ -1902,10 +1914,21 @@ Each milestone ends with tests passing in CI.
   on a device before the first release, and the one that matters most is that
   `localStorage` survives an app **upgrade** — the origin preferences are what make
   that work and the failure is silent.
-- **M7 — Release hardening.** Low-end device testing. Store assets per section 9.6:
-  generate the drawn pair, capture all three screenshot sets from the finished UI,
-  write `store/listing.md`, publish `privacy.html` to Pages, and answer the Data
-  Safety and content-rating questionnaires. First manual Play submission.
+- **M7 — Release hardening. Written; three items wait on a device.**
+  `store/listing.md` with the name, descriptions, Data Safety answers and content
+  rating, `store/README.md` with the capture procedure, the drawn assets from
+  `scripts/generate-store-assets.mjs`, and `public/privacy.html` published to Pages
+  and precached so the policy works offline too.
+
+  An accessibility pass was run against the live accessibility tree rather than only
+  the tests, and found two defects the DOM tests could not: a duplicated Statistics
+  heading, because both the screen and the view supplied one, and the daily button
+  announcing its whole tooltip in place of its name.
+
+  Still waiting on hardware, and listed in `store/README.md` and
+  `native/README.md`: the screenshots, which cannot be captured until the app runs
+  in the shell; low-end device testing; and the first manual Play submission. The
+  contact email Play requires is also unset.
 
 ### 14.1 M0.5 — the playtest gate
 

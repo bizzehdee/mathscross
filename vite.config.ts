@@ -38,30 +38,36 @@ function normaliseBase(value: string | undefined): string {
 /**
  * The version stamped into the bundle.
  *
- * Source order: the release tag from CI, then git describe, then the
- * package.json version. Each fallback exists because the one before it is
- * absent in some legitimate case: no CI, no tags yet, or no git at all.
- * Plan section 4.
+ * `package.json` is the single source. A release is triggered by pushing a
+ * `vX.Y.Z` tag, and `scripts/stamp-version.mjs` writes that version into
+ * `package.json` and `native/config.xml` before either build runs — so the web
+ * bundle, the Android store version and the package metadata cannot disagree.
+ *
+ * An earlier version read `GITHUB_REF_NAME` here as well, which meant the tag was
+ * parsed in two places with two slightly different notions of what a valid tag was.
+ * One parser, in the stamping script, which fails loudly on a malformed tag.
+ *
+ * Anything not stamped is a development build, and says so rather than reporting a
+ * bare commit hash that looks like it might be a release.
  */
 function resolveVersion(): string {
   const packageVersion = (
     JSON.parse(readFileSync('package.json', 'utf8')) as { version?: string }
   ).version
 
-  // GitHub Actions sets this to the tag name for a tag-triggered run.
-  const tag = process.env['GITHUB_REF_NAME']
-  if (typeof tag === 'string' && /^v\d/.test(tag)) {
-    return tag.replace(/^v/, '')
+  if (typeof packageVersion === 'string' && packageVersion !== '0.0.0') {
+    return packageVersion
   }
 
   try {
-    return execSync('git describe --tags --always --dirty', {
+    const describe = execSync('git describe --tags --always --dirty', {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
+    return `0.0.0-dev+${describe}`
   } catch {
     // No git, no tags, or a shallow checkout. Not an error.
-    return packageVersion ?? '0.0.0'
+    return '0.0.0-dev'
   }
 }
 

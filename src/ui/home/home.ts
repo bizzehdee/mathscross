@@ -91,6 +91,10 @@ export function createHomeView(callbacks: HomeCallbacks): HomeView {
 
   const daily = action('Daily', () => callbacks.onDaily())
   daily.title = ROLLOVER_NOTE
+  // An explicit name, because a `title` can otherwise become the accessible name
+  // and announce the whole rollover note where "Daily" was wanted.
+  daily.setAttribute('aria-label', 'Daily puzzle')
+  daily.setAttribute('aria-description', ROLLOVER_NOTE)
   daily.setAttribute('data-daily', 'true')
   newGroup.append(daily)
 

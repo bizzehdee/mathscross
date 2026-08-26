@@ -33,9 +33,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Build the web bundle into native/www
-        run: npm run build:native
-
       # cordova-android 15 targets SDK 36 and build-tools 36.0.0. The runner ships
       # an SDK but not necessarily those, and Gradle will not install a missing
       # platform itself. Done with the preinstalled sdkmanager rather than a
@@ -50,40 +47,22 @@ jobs:
         working-directory: native
         run: npm ci
 
-      # The store version comes from config.xml, not from the bundle, so without
-      # this every release would publish as 0.0.0 whatever was tagged. Only the
-      # leading digits: a store version must be numeric, so v1.2.3-rc1 becomes
-      # 1.2.3.
+      # One script stamps package.json and native/config.xml and computes the
+      # versionCode. Shared with pages.yml, so a release cannot have the web bundle
+      # and the store version disagree, and the tag is parsed in exactly one place.
+      #
+      # It rejects anything but a strict vX.Y.Z. A pre-release such as v1.2.3-rc1
+      # cannot be represented in a Play store version, and truncating it to 1.2.3
+      # would collide with the release it precedes.
       - name: Stamp the version from the tag
         id: version
         if: startsWith(github.ref, 'refs/tags/v')
-        working-directory: native
-        run: |
-          VERSION="$(printf '%s' "${GITHUB_REF_NAME#v}" | grep -oE '^[0-9]+(\.[0-9]+){0,2}')"
-          if [ -z "$VERSION" ]; then
-            echo "Tag ${GITHUB_REF_NAME} has no numeric version to stamp." >&2
-            exit 1
-          fi
-          sed -i "s|\(<widget id=\"[^\"]*\" version=\)\"[^\"]*\"|\1\"${VERSION}\"|" config.xml
+        run: node scripts/stamp-version.mjs "${{ github.ref_name }}"
 
-          # versionCode is what Play orders releases by, and it must increase for
-          # every upload. Computed here rather than left to cordova-android, whose
-          # default is major*10000 + minor*100 + patch: that collides, so 1.0.100
-          # and 1.1.0 both produce 10100 and the second upload is rejected as not
-          # an increase. This scheme allows 999 minor and patch releases before the
-          # same problem, which is far enough away.
-          MAJOR="$(echo "$VERSION" | cut -d. -f1)"
-          MINOR="$(echo "$VERSION" | cut -s -d. -f2)"
-          PATCH="$(echo "$VERSION" | cut -s -d. -f3)"
-          VERSION_CODE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
-          if [ "${MINOR:-0}" -ge 1000 ] || [ "${PATCH:-0}" -ge 1000 ]; then
-            echo "Version $VERSION has a minor or patch of 1000 or more, which this versionCode scheme cannot encode." >&2
-            exit 1
-          fi
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "versionCode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "Publishing $VERSION as versionCode $VERSION_CODE"
+      # After stamping, so the bundle carries the release version rather than a
+      # development one.
+      - name: Build the web bundle into native/www
+        run: npm run build:native
 
       - name: Add the Android platform
         working-directory: native

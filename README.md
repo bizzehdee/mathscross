@@ -83,6 +83,25 @@ Both come from the same source through one config factory in `vite.config.ts`, s
 a setting cannot drift between them and produce a defect reproducible on only one
 platform.
 
+## Screens
+
+The app opens on a **home** screen rather than a board: continue what you were
+doing, start something new, or take the daily. **Statistics**, **Settings** and
+**How to play** are screens of their own, reached from home and left with the
+Menu button. On Android the hardware back button does the same, and exits only
+from home.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run icons` | Regenerates `public/icons/` and `public/icon.svg` |
+| `npm run store:assets` | Regenerates the Play feature graphic and store icon |
+| `npm run size` | Fails if a gzipped output exceeds its ceiling |
+
+Both graphics scripts use a dependency-free PNG encoder in `scripts/png.mjs`, so
+no image tooling is needed.
+
 ## Design authority
 
 [plan.md](plan.md) is the design document: the rules of the game, the generator
