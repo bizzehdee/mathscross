@@ -343,7 +343,6 @@ in the same places.
   README.md
   AGENTS.md
   .learnings/
-  standards/
   store/                      # Play listing. Uploaded by hand, ships in nothing
     listing.md                # name, descriptions, Data Safety answers
     README.md                 # how to regenerate and how to capture
@@ -1371,13 +1370,16 @@ Four workflows. Pin the Node version and read it in every workflow.
 2. Set up Node 20 with the npm cache.
 3. `npm ci`.
 4. `npm run typecheck`.
-5. `npm run lint`.
-6. `npm test` — the fast suite only.
-7. `npm run build`.
-8. `npm run build:native`. The native bundle builds from the same source through a
+5. `npm test` — the fast suite only.
+6. `npm run build`.
+7. `npm run build:native`. The native bundle builds from the same source through a
    second config, so a change can break it while the web build still passes. It costs
    seconds and is the only step that would catch that.
-9. After M3, the bundle size gate from section 8.4.
+8. After M3, the bundle size gate from section 8.4.
+
+There is no lint step, because there is no linter. The sibling has none either, and
+`strict` plus `noUnusedLocals` and `noUnusedParameters` covers most of what one would
+catch here. Adding ESLint would be a dependency this plan has not justified.
 
 `permissions: contents: read`. The workflow must fail if any step fails.
 
@@ -1619,7 +1621,7 @@ Each milestone ends with tests passing in CI.
 
 - **M0 — Foundations.** Repository scaffolded from the sibling's shape:
   `package.json`, `tsconfig.json`, the two Vite configs, the two Vitest configs,
-  `README.md`, `standards/`, `.learnings/`, `ci.yml`, `pages.yml`, `slow.yml`.
+  `README.md`, `.learnings/`, `ci.yml`, `pages.yml`, `slow.yml`.
   `tokens.css` and `layout.css` copied with the accent changed and `--colour-note`
   removed. A blank page builds for both targets. `.gitignore` and `.gitattributes`
   are already committed.

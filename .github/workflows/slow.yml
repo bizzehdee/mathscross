@@ -1,0 +1,39 @@
+name: Slow suite
+
+# The 100-seed-per-difficulty generation coverage. Deliberately not on pull
+# requests: a MathsCross generation attempt spans mesh search, operand width
+# assignment, fill, and a uniqueness check per masking step, so it costs more
+# than the sibling's 3ms attempt. Running it on every push would tax every push
+# for a signal that changes rarely. Plan section 10.4.
+on:
+  schedule:
+    # 03:00 UTC daily. Nothing depends on the hour; it is outside the times a
+    # person is likely to be pushing.
+    - cron: '0 3 * * *'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slow:
+    runs-on: ubuntu-latest
+    # The wall-clock ceiling. Without it a generator regression turns into a
+    # quietly lengthening job rather than a failure. Set from the M2 measurement
+    # plus headroom; this is the placeholder until that measurement exists, and
+    # plan section 16.1 records it as owed.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Slow tests
+        run: npm run test:slow

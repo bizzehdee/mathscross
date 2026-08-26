@@ -1,0 +1,146 @@
+/* Layout and components.
+   One layout trigger, and it is aspect ratio, not width. Plan section 8.2.
+
+   Board and keypad rules arrive at M3 with the board itself. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--colour-surface);
+  color: var(--colour-ink);
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Insets on every edge, not just the bottom.
+
+   index.html opts into viewport-fit=cover, and from Android 15 an app targeting
+   SDK 35 or above is drawn edge to edge whether it asks to be or not. Padding
+   only the bottom leaves the header under the status bar there, and under the
+   camera cutout in landscape, where the left or right inset is the large one.
+
+   env() resolves to 0px on a display with nothing to avoid, so this costs
+   nothing on a screen without insets and needs no feature query. */
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) calc(var(--space-3) + env(safe-area-inset-right))
+    calc(var(--space-3) + env(safe-area-inset-bottom)) calc(var(--space-3) + env(safe-area-inset-left));
+}
+
+/* Shared controls */
+
+.button {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+  background: var(--colour-surface-raised);
+  color: var(--colour-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  /* Removes the WebView's ~300ms double-tap-zoom wait on this element while
+     leaving page scrolling and pinch-zoom intact. Preferred over
+     user-scalable=no in the viewport meta, which would disable pinch-zoom for
+     everyone. Plan section 8.3. */
+  touch-action: manipulation;
+  /* The default grey flash is a WebView artefact and reads as a rendering
+     fault. The :active rule below replaces it. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:hover {
+  border-color: var(--colour-line-strong);
+}
+
+/* On :active, not only :hover. A touch device has no hover, so a hover-only
+   affordance is invisible to every Android player. */
+.button:active {
+  border-color: var(--colour-accent);
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--colour-accent);
+  outline-offset: 2px;
+}
+
+.button[data-active='true'] {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-surface-raised);
+}
+
+.header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.header__difficulty {
+  font-size: 0.9rem;
+  color: var(--colour-ink-muted);
+  text-transform: capitalize;
+}
+
+.status {
+  margin: 0;
+  min-height: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--colour-ink-muted);
+}
+
+/* Layout: stacked by default, side by side when wider than tall.
+
+   A width breakpoint is deliberately not used. A landscape phone at 844x390 is
+   narrow and short, so a width rule would give it the stacked layout, which
+   cannot fit a header, a square board, controls and a keypad in 390px of
+   height. Plan section 8.2. */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (min-aspect-ratio: 1/1) and (min-width: 45rem) {
+  .layout {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+}
+
+/* Animation is effectively absent by design: a transition on cell entry would
+   fight fast typing and reintroduce the latency the touch rules above remove.
+   The single completion transition arrives at M3 and is gated here. Plan
+   section 8.3. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

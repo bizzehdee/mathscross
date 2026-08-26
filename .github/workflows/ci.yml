@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The fast suite only. The slow suite runs in slow.yml, nightly and on
+      # tags: a MathsCross generation attempt costs more than a Sudoku one, so
+      # running 100 seeds per difficulty here would tax every push for a signal
+      # that changes rarely. Plan section 10.4.
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The native bundle is built from the same source through a second Vite
+      # config, so a change can break it while leaving the web build passing.
+      # This is seconds, and it is the only thing here that would catch it.
+      - name: Build native bundle
+        run: npm run build:native

@@ -1,0 +1,72 @@
+/* Colour, spacing and type scale. Themes redefine these custom properties by
+   data-theme attribute. Plan section 8.1.
+
+   Taken from the Sudoku sibling so the two applications stay recognisably one
+   family, with three deliberate differences recorded in plan section 11:
+   the accent differs, --colour-note is absent, and --colour-group is new. */
+:root {
+  --colour-surface: #f7f7f5;
+  --colour-surface-raised: #ffffff;
+  --colour-ink: #1a1a18;
+  --colour-ink-muted: #6b6b66;
+  --colour-line: #c9c9c2;
+  --colour-line-strong: #3a3a36;
+  /* Indigo, where the sibling is green. Two applications by the same author
+     sharing an accent are hard to tell apart in a task switcher, and the accent
+     is the only theme token that differs. 6.21:1 on the raised surface. */
+  --colour-accent: #3a5fa8;
+  /* Background tint marking the cells of one multi-cell number. Without a
+     grouping cue the player cannot tell 1 5 from two separate operands. The
+     sibling has no equivalent, having no multi-cell values. Plan section 8.5. */
+  --colour-group: #e4e9f5;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+
+  --radius: 0.5rem;
+  --tap-min: 44px;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --colour-surface: #16171a;
+    --colour-surface-raised: #1f2126;
+    --colour-ink: #ecece8;
+    --colour-ink-muted: #9a9a94;
+    --colour-line: #3a3d44;
+    --colour-line-strong: #8b8f98;
+    /* 7.39:1 on the raised surface. */
+    --colour-accent: #8fb0f0;
+    --colour-group: #2a3242;
+  }
+}
+
+:root[data-theme='dark'] {
+  --colour-surface: #16171a;
+  --colour-surface-raised: #1f2126;
+  --colour-ink: #ecece8;
+  --colour-ink-muted: #9a9a94;
+  --colour-line: #3a3d44;
+  --colour-line-strong: #8b8f98;
+  --colour-accent: #8fb0f0;
+  --colour-group: #2a3242;
+}
+
+/* High contrast. Chosen explicitly rather than derived from the dark palette,
+   because raising contrast is not the same as inverting one. The accent stays
+   the sibling's yellow: it is picked for contrast, not for brand. */
+:root[data-theme='contrast'] {
+  --colour-surface: #000000;
+  --colour-surface-raised: #000000;
+  --colour-ink: #ffffff;
+  --colour-ink-muted: #d9d9d9;
+  --colour-line: #8c8c8c;
+  --colour-line-strong: #ffffff;
+  --colour-accent: #ffd400;
+  --colour-group: #262626;
+}

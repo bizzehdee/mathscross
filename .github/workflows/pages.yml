@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Tags deploy. Pushes to main only build and test, in ci.yml.
+# Plan section 10.2.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required by the Pages deployment action. There are no stored credentials:
+  # the token is minted per run.
+  pages: write
+  id-token: write
+
+# One deploy at a time. A queued run is not cancelled, so a tag pushed during a
+# deploy still publishes rather than being dropped.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed so the build can stamp the version from git describe.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - name: Build
+        # Pages for a project repository serves from /<repo>/, so every asset
+        # path, the manifest scope and the service worker scope must carry it.
+        # configure-pages resolves the correct value, including for a custom
+        # domain, where it is '/'. Never hardcode it.
+        run: npm run build
+        env:
+          APP_BASE: ${{ steps.pages.outputs.base_path }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
