@@ -228,6 +228,16 @@ each side evaluated in reading order.
 This is the rule most likely to defeat a new player, because school teaches the
 opposite. Section 8.7 makes teaching it a release-1 requirement.
 
+**M0.5 found that the rule almost never applies.** Precedence can only disambiguate
+an equation with two operators on the left of the `=`, and that needs seven cells for
+the left side plus two for the result. Nine cells is a full Hard row, in the single
+pattern that fits. Easy and Medium cannot express such an equation at all.
+
+So left-to-right evaluation is, in practice, a **Hard-only mechanic**. That is
+arguably good design — it gives Hard something qualitatively its own rather than
+merely more masking — but it should be a deliberate choice. It also weakens the case
+for leading the onboarding with it; section 8.7 records that as open.
+
 ### 2.6 Value range is derived, not declared
 
 Under one digit per cell, an operand's magnitude is a consequence of how many cells
@@ -511,7 +521,11 @@ thread.
      reference board.
    - Every non-`block` cell must belong to at least one equation, per section 2.4.
    - The graph of connected equations must form a single connected component.
-   - The intersection count must fall in the difficulty's range.
+   - The intersection count must fall in the difficulty's range. **Prefer the top of
+     that range.** Intersection cells are the ones that survive masking, so
+     intersection density is a lever on achievable mask density rather than a free
+     parameter. Section 5.4 step 2 and
+     `.learnings/masking-is-limited-by-weakly-constrained-cells.md`.
 4. Stop when the intersection count is met and no further segment can be placed.
 
 The mesh must also fix **operand cell widths**. For each equation, decide how many
@@ -556,11 +570,21 @@ reach uniqueness.
 ### 5.4 Phase 4 — cell masking
 
 1. Compute target mask counts from the difficulty table.
-2. Mask cells one at a time, in seeded random order, up to the targets.
+2. Mask cells one at a time, in seeded random order, up to the targets. **Weight the
+   order towards intersection cells.** A cell belonging to two equations is far more
+   likely to survive masking than one belonging to one, so an unweighted order spends
+   the uniqueness budget on the least maskable cells first. This is measured, not
+   assumed: see `.learnings/masking-is-limited-by-weakly-constrained-cells.md`.
 3. After each mask, re-run the uniqueness check. If uniqueness is lost, restore that
    cell and continue with the next candidate.
-4. Stop when the targets are met or the candidate list is exhausted.
-5. Report achieved mask density alongside the puzzle, so section 13.4 can assert on
+4. **Treat an operator mask exactly like a digit mask.** It is not cheaper. Usually
+   the arithmetic and the cell widths force the operator, but not always: `2 ? 32 =
+   ?4` admits both `2 + 32 = 34` and `2 * 32 = 64`, because two operators can agree
+   on the result's digit count and its final digit. An operator mask therefore needs
+   the same uniqueness check, and when the check fails the fix is to restore that
+   operator, not a digit.
+5. Stop when the targets are met or the candidate list is exhausted.
+6. Report achieved mask density alongside the puzzle, so section 13.4 can assert on
    it and a collapsing ladder fails a test instead of shipping.
 
 Masking a `digit` cell that holds the leading digit of a multi-cell number is legal.
@@ -572,6 +596,13 @@ at Hard instead of 75% is acceptable. A puzzle with two solutions is not. Unique
 always wins. What is *not* acceptable is silent collapse: if achieved density falls
 more than 10 percentage points below target, the difficulty is no longer the
 difficulty it claims to be, and section 13.4 fails.
+
+M0.5 supplied an early warning about that tolerance. A Medium board built by hand
+reached only 42% digit masking against its 60% target — an 18-point shortfall,
+constructed deliberately rather than found by search. If the generator misses
+similarly, the response is to fix the masking order or the mesh's intersection
+density, per step 2. **Do not widen the tolerance in section 13.4 to make the
+assertion pass**, which would defeat the assertion's purpose.
 
 ### 5.5 Determinism
 
@@ -1031,7 +1062,20 @@ addresses this, and with the Kids tier deferred, Easy carries the teaching job a
 - Keep a permanent link to the same card in the menu, so it can be re-read.
 - Record dismissal in settings, not in the board slot.
 
-This is the highest-value small addition in the plan. Build it at M3, not at M7.
+Build it at M3, not at M7.
+
+**Open, after M0.5: should the explainer still lead with the left-to-right rule?**
+Section 2.5 records the finding that the rule cannot arise below Hard, because a
+two-operator left side needs nine cells. A player who never reaches Hard never meets
+it, so leading with it teaches a rule that will not be exercised and delays the rule
+that will — that numbers span cells, which applies from the first Medium board and is
+the thing most likely to be misread. Two candidate orderings:
+
+1. Lead with multi-cell numbers, and introduce left-to-right on first entry to Hard.
+2. Keep one card covering both, with multi-cell numbers first.
+
+Decide before building the card. Until then this section's requirement stands: the
+left-to-right rule must be taught *somewhere* before a player can meet it.
 
 ### 8.8 Accessibility
 
