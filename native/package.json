@@ -1,0 +1,22 @@
+{
+  "name": "mathscross-native",
+  "version": "0.0.0",
+  "description": "Cordova shell that packages the MathsCross web build as a native app",
+  "private": true,
+  "scripts": {
+    "prepare:android": "cordova platform add android",
+    "android": "cordova run android",
+    "build:android": "cordova build android --release -- --packageType=apk",
+    "build:aab": "cordova build android --release -- --packageType=bundle"
+  },
+  "devDependencies": {
+    "cordova": "13.0.0",
+    "cordova-android": "15.1.0"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ],
+    "plugins": {}
+  }
+}

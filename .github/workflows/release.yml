@@ -1,0 +1,286 @@
+name: Release native binaries
+
+# Same trigger as the Pages deploy, but a separate workflow on purpose. A broken
+# Android toolchain must not stop the web release: the two ship independently.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags are needed so the bundle can stamp its version from git describe.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Gradle 8.14 and AGP 8.10, which cordova-android 15 pins, need a JDK of at
+      # least 17. 21 is the current LTS and what that Gradle is tested against.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+
+      - name: Build the web bundle into native/www
+        run: npm run build:native
+
+      # cordova-android 15 targets SDK 36 and build-tools 36.0.0. The runner ships
+      # an SDK but not necessarily those, and Gradle will not install a missing
+      # platform itself. Done with the preinstalled sdkmanager rather than a
+      # third-party action, so the release path adds no new supply chain.
+      - name: Install the Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install the Cordova toolchain
+        working-directory: native
+        run: npm ci
+
+      # The store version comes from config.xml, not from the bundle, so without
+      # this every release would publish as 0.0.0 whatever was tagged. Only the
+      # leading digits: a store version must be numeric, so v1.2.3-rc1 becomes
+      # 1.2.3.
+      - name: Stamp the version from the tag
+        id: version
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: native
+        run: |
+          VERSION="$(printf '%s' "${GITHUB_REF_NAME#v}" | grep -oE '^[0-9]+(\.[0-9]+){0,2}')"
+          if [ -z "$VERSION" ]; then
+            echo "Tag ${GITHUB_REF_NAME} has no numeric version to stamp." >&2
+            exit 1
+          fi
+          sed -i "s|\(<widget id=\"[^\"]*\" version=\)\"[^\"]*\"|\1\"${VERSION}\"|" config.xml
+
+          # versionCode is what Play orders releases by, and it must increase for
+          # every upload. Computed here rather than left to cordova-android, whose
+          # default is major*10000 + minor*100 + patch: that collides, so 1.0.100
+          # and 1.1.0 both produce 10100 and the second upload is rejected as not
+          # an increase. This scheme allows 999 minor and patch releases before the
+          # same problem, which is far enough away.
+          MAJOR="$(echo "$VERSION" | cut -d. -f1)"
+          MINOR="$(echo "$VERSION" | cut -s -d. -f2)"
+          PATCH="$(echo "$VERSION" | cut -s -d. -f3)"
+          VERSION_CODE=$(( ${MAJOR:-0} * 1000000 + ${MINOR:-0} * 1000 + ${PATCH:-0} ))
+          if [ "${MINOR:-0}" -ge 1000 ] || [ "${PATCH:-0}" -ge 1000 ]; then
+            echo "Version $VERSION has a minor or patch of 1000 or more, which this versionCode scheme cannot encode." >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION as versionCode $VERSION_CODE"
+
+      - name: Add the Android platform
+        working-directory: native
+        run: npx cordova platform add android --no-save
+
+      # The game makes no network requests, and the absence of the permission is
+      # what makes that checkable from the store listing. The hook that removes it
+      # throws rather than warning, so a failure fails the build — but assert it
+      # here too, because this is the property a reviewer would actually check.
+      - name: Assert the app requests no INTERNET permission
+        working-directory: native
+        run: |
+          MANIFEST=platforms/android/app/src/main/AndroidManifest.xml
+          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            echo "The manifest still requests INTERNET. Plan section 9.4 forbids it." >&2
+            grep -n 'uses-permission' "$MANIFEST" >&2
+            exit 1
+          fi
+          echo "No INTERNET permission. Permissions declared:"
+          grep -n 'uses-permission' "$MANIFEST" || echo "  (none)"
+
+      # Signing material is optional so that a release still produces something
+      # inspectable before a keystore exists. An unsigned build cannot go to Play;
+      # see native/README.md for the secrets to set.
+      - name: Write the signing configuration
+        id: signing
+        working-directory: native
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No ANDROID_KEYSTORE_BASE64 secret. Building unsigned."
+            exit 0
+          fi
+          # Whitespace stripped before decoding. The secret is pasted by hand, and
+          # an encoder that wraps at a column, or a trailing newline from a shell
+          # redirect, would otherwise fail the decode with nothing to suggest why.
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > release.p12
+          if [ ! -s release.p12 ]; then
+            echo "ANDROID_KEYSTORE_BASE64 did not decode to a keystore. Re-encode it; see native/README.md." >&2
+            exit 1
+          fi
+          # PKCS12 stated explicitly rather than inferred from the .p12 extension,
+          # so renaming the file cannot silently change the format it is read as.
+          #
+          # build.json is written at build time and never committed. It is the only
+          # way to pass a key password to Cordova without putting it on a command
+          # line, where it would appear in the process list and the log.
+          jq -n \
+            --arg pw "$KEYSTORE_PASSWORD" \
+            --arg alias "$KEY_ALIAS" \
+            --arg keypw "$KEY_PASSWORD" \
+            '{android:{release:{keystore:"release.p12",storePassword:$pw,alias:$alias,password:$keypw,keystoreType:"pkcs12"}}}' \
+            > build.json
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      # --versionCode only when a tag supplied one. On a manual run there is no
+      # version to derive it from, and passing an empty value would set 0.
+      - name: Build the app bundle
+        working-directory: native
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          npx cordova build android --release -- --packageType=bundle \
+            ${VERSION_CODE:+--versionCode="$VERSION_CODE"}
+
+      - name: Build the APK
+        working-directory: native
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.versionCode }}
+        run: |
+          npx cordova build android --release -- --packageType=apk \
+            ${VERSION_CODE:+--versionCode="$VERSION_CODE"}
+
+      # Collect by pattern rather than by exact name: an unsigned build is
+      # app-release-unsigned.apk and a signed one is app-release.apk, so naming
+      # either would silently collect nothing half the time.
+      - name: Collect the binaries
+        working-directory: native
+        run: |
+          mkdir -p ../artifacts
+          find platforms/android/app/build/outputs -type f \( -name '*.aab' -o -name '*.apk' \) \
+            -exec cp {} ../artifacts/ \;
+          ls -l ../artifacts
+          test -n "$(ls -A ../artifacts)" || { echo "No binaries were produced." >&2; exit 1; }
+
+      - name: Remove the decoded keystore
+        if: always()
+        working-directory: native
+        run: rm -f release.p12 build.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ github.ref_name }}
+          path: artifacts/
+          if-no-files-found: error
+
+      - name: Attach the binaries to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME"
+          fi
+          gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+
+      - name: Warn when the build is unsigned
+        if: steps.signing.outputs.signed != 'true'
+        run: |
+          echo "::warning title=Unsigned Android build::No keystore secret is set, so these binaries cannot be uploaded to Google Play. See native/README.md."
+
+      # Publishing to Play.
+      #
+      # Dormant until PLAY_SERVICE_ACCOUNT_JSON is set, which is deliberate: Google
+      # requires the first upload of a new app to be done by hand, so the secret is
+      # what turns automation on once that has happened.
+      #
+      # Uploads the AAB only. Play distributes bundles and generates the APKs
+      # itself; the APK this workflow builds is for sideloading.
+      #
+      # Pinned to a commit rather than a tag. A tag can be moved, and this step
+      # holds a credential that can publish to the Play account, so the exact code
+      # has to be the thing that is trusted.
+      - name: Publish to Google Play
+        id: publish
+        if: >
+          startsWith(github.ref, 'refs/tags/v')
+          && steps.signing.outputs.signed == 'true'
+          && env.PLAY_JSON != ''
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.bizzeh.mathscross
+          releaseFiles: native/platforms/android/app/build/outputs/bundle/release/*.aab
+          # Production by default: a release from this pipeline is a production
+          # release, not something to promote up through testing tracks.
+          #
+          # Overridable only because Play can refuse production uploads for reasons
+          # outside this repository. A personal developer account created after
+          # 13 November 2023 must run a closed test with 12 testers for 14
+          # continuous days before production access is granted, and until then an
+          # upload to this track is rejected. Setting the repository variable
+          # PLAY_TRACK to `internal` gets releases flowing meanwhile; clear it once
+          # production access is granted.
+          track: ${{ vars.PLAY_TRACK || 'production' }}
+          # Published, not drafted. A tag is the release: it goes live with no
+          # further step and no approval gate. The tag is therefore the only thing
+          # between a commit and every player, so tag deliberately.
+          status: completed
+
+      - name: Say what to do next
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if [ "${{ steps.publish.outcome }}" = "success" ]; then
+            echo "::notice title=Published to Play::Version ${{ steps.version.outputs.version }} (versionCode ${{ steps.version.outputs.versionCode }}) is live on the ${{ vars.PLAY_TRACK || 'production' }} track. It cannot be withdrawn, only superseded by a higher version."
+          else
+            echo "::notice title=Not uploaded::The binaries are attached to the release. Upload the .aab by hand, or set PLAY_SERVICE_ACCOUNT_JSON to automate it. See native/README.md."
+          fi
+
+  # Disabled by default. An installable iOS binary must be signed by an Apple
+  # Developer account, and this repository holds no certificate or provisioning
+  # profile. With BUILD_IOS set this job compiles without signing, which proves the
+  # shell builds but produces nothing installable. iOS is out of scope for
+  # release 1: plan section 1.5.
+  ios:
+    if: vars.BUILD_IOS == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the web bundle into native/www
+        run: npm run build:native
+
+      - name: Install the Cordova toolchain
+        working-directory: native
+        run: npm ci
+
+      - name: Add the iOS platform
+        working-directory: native
+        run: npx cordova platform add ios --no-save
+
+      - name: Build without signing
+        working-directory: native
+        run: npx cordova build ios --release --device -- --codeSignIdentity="" --developmentTeam=""

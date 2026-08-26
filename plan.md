@@ -1297,10 +1297,20 @@ loses the player's history.
 
 ### 9.3 Plugins
 
-Keep the plugin list minimal. Every plugin is native code and a supply-chain surface.
-Do not add one without stating the current problem it solves. Match the sibling's set
-unless a stated need differs. Note that a third plugin is a trigger to reconsider the
-wrapper, per section 9.1.
+**None.** Not "as few as possible" — zero.
+
+An earlier draft of this section listed a splash screen and a status bar plugin as
+the minimum. Checking the sibling project at M6 found it ships neither:
+cordova-android 15 drives the splash screen from the preferences in `config.xml`, so
+the plugin buys nothing, and the status bar needs no plugin for an app that does not
+recolour it.
+
+Every plugin is native code and a supply-chain surface. Zero also keeps a long way
+clear of one of the four triggers in section 9.1 for reconsidering Cordova against
+Capacitor, which is needing a third plugin — because that is the point at which
+Cordova's XML-patching model starts to hurt.
+
+Do not add one without stating the current problem it solves.
 
 ### 9.4 Android configuration
 
@@ -1830,12 +1840,23 @@ Each milestone ends with tests passing in CI.
   changes silently never applied — recorded in
   `.learnings/production-csp-blocks-dev-hmr.md`, which is also what had caused a
   misdiagnosis at M3.
-- **M6 — Cordova and Android.** `native/` project with the origin preferences from
-  section 9.2, touch entry, the back button, safe areas, permission removal, CSP,
-  `release.yml` producing a signed AAB. Verify `localStorage` survives an app restart
-  and upgrade on a device. Verify tap latency on a device. Measure the installed app
-  size and set the real ceiling. Record the Cordova-over-Capacitor decision and its
-  trigger conditions in `.learnings/`.
+- **M6 — Cordova and Android. Written, not verified.** `native/config.xml` with the
+  origin preferences from section 9.2, zero plugins, no orientation lock,
+  `native/hooks/remove-internet-permission.js`, `native/README.md`, and
+  `release.yml` producing a signed AAB and APK with the `versionCode` scheme, PKCS12
+  signing through `build.json`, and a dormant Play publish step.
+
+  The permission hook is verified against a realistic generated manifest: it removes
+  `INTERNET`, leaves every other element intact, is idempotent, and throws rather
+  than passing silently if the element shape changes. `release.yml` asserts the
+  absence independently, because that is the property a reviewer would check.
+
+  **The shell itself has never been built.** There is no Android SDK on the
+  development machine, so `config.xml` and the workflow are written from this plan
+  and from the sibling's working setup. `native/README.md` lists what must be checked
+  on a device before the first release, and the one that matters most is that
+  `localStorage` survives an app **upgrade** — the origin preferences are what make
+  that work and the failure is silent.
 - **M7 — Release hardening.** Low-end device testing. Store assets per section 9.6:
   generate the drawn pair, capture all three screenshot sets from the finished UI,
   write `store/listing.md`, publish `privacy.html` to Pages, and answer the Data

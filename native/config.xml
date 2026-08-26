@@ -1,0 +1,98 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Cordova shell configuration.
+
+  The application itself is not here. It is built from ../src into ./www by
+  `npm run build:native` in the repository root, which uses
+  vite.cordova.config.ts. Nothing in this directory should ever be edited to
+  change game behaviour.
+
+  The widget id is the store identifier and cannot be changed after a first
+  submission without shipping a different app. Plan section 9.4.
+-->
+<widget id="com.bizzeh.mathscross" version="0.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>MathsCross</name>
+    <description>Offline maths crossword with three difficulties and a daily puzzle</description>
+    <!--
+      No author email yet. Both stores publish the developer contact address on
+      the public listing, so it should be an address chosen for that purpose
+      rather than a work or personal one. Google Play requires one, so set it
+      before the first submission.
+    -->
+    <author href="https://github.com/bizzehdee/mathscross">bizzehdee</author>
+
+    <content src="index.html" />
+
+    <!--
+      No <access> and no <allow-navigation>, deliberately. The game makes no
+      requests: every puzzle is generated on the device. Cordova's default
+      without these permits nothing beyond the app's own origin, which is exactly
+      what is wanted. The templates' usual <access origin="*" /> would hand the
+      app the whole internet for no reason.
+    -->
+
+    <preference name="DisallowOverscroll" value="true" />
+    <!--
+      Keeps localStorage in the WebView's own store rather than the Android
+      backup agent's, so it behaves the same on every device.
+    -->
+    <preference name="BackupWebStorage" value="local" />
+
+    <!--
+      No Orientation preference, deliberately, for two reasons.
+
+      Locking to portrait emits android:screenOrientation="portrait", which Play
+      flags as a resizability restriction. And it would contradict the
+      application: plan section 8.2 designs a side-by-side layout for a viewport
+      wider than tall, and the media query for it is tested. Locking orientation
+      would ship a layout that can never be reached.
+
+      Rotation is safe mid-game: the activity declares configChanges for
+      orientation, screenSize and screenLayout, so it is not recreated and the
+      WebView is not reloaded.
+    -->
+
+    <!--
+      The board mounts synchronously from the bundled starter puzzle, so there is
+      nothing to wait for and a timed splash would only add delay.
+      Plan section 5.8.
+    -->
+    <preference name="AutoHideSplashScreen" value="true" />
+    <preference name="SplashScreenDelay" value="0" />
+
+    <!--
+      Strips the INTERNET permission from the generated manifest.
+
+      cordova-android adds it by default. The game is offline by design, and the
+      absence of the permission is what turns that from a claim into something a
+      player can verify from the store listing. Plan section 9.4.
+    -->
+    <hook type="after_prepare" src="hooks/remove-internet-permission.js" />
+
+    <platform name="android">
+        <!--
+          Serves the bundle from https://localhost through Android's asset loader
+          rather than from file://. A real origin is what makes localStorage
+          durable and gives the app a secure context; under file:// the WebView
+          treats storage as scratch space it may discard, which would lose a
+          player's stats, streak and in-progress boards.
+
+          The failure is silent — nothing breaks at build time or on first run,
+          only after an upgrade. See .learnings/native-shell-origin.md.
+        -->
+        <preference name="AndroidInsecureFileModeEnabled" value="false" />
+        <preference name="scheme" value="https" />
+        <preference name="hostname" value="localhost" />
+    </platform>
+
+    <platform name="ios">
+        <!--
+          Same reasoning as Android: an app:// origin instead of file://. Not
+          built for release 1 — plan section 1.5 — but kept correct so the
+          disabled iOS job in release.yml compiles something meaningful.
+        -->
+        <preference name="scheme" value="app" />
+        <preference name="hostname" value="localhost" />
+        <preference name="WKSuspendInBackground" value="false" />
+    </platform>
+</widget>

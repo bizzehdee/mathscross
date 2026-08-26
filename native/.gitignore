@@ -1,0 +1,20 @@
+# Build output from `npm run build:native` in the repository root. Generated from
+# ../src on every build, so it is never committed.
+www/
+
+# Cordova's own generated trees. `cordova platform add` recreates platforms/ from
+# config.xml and package.json, and plugins/ from the plugin list, so neither is
+# source.
+platforms/
+plugins/
+node_modules/
+
+# Signing material. A keystore and its passwords must never enter the repository:
+# the release job reconstructs both from secrets at build time. Ignored here as a
+# backstop, not as permission to keep them in this directory.
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.base64
+build.json
