@@ -34,6 +34,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Added at M3, once there was a bundle worth measuring. Ceilings live in
+      # scripts/check-size.mjs and are set from measurement. Plan section 8.4.
+      - name: Bundle size
+        run: npm run size
+
       # The native bundle is built from the same source through a second Vite
       # config, so a change can break it while leaving the web build passing.
       # This is seconds, and it is the only thing here that would catch it.

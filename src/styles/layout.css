@@ -9,6 +9,20 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must beat a layout class.
+
+   `hidden` is specified as `display: none`, but at the lowest specificity, so any
+   class setting `display` overrides it. Both `.onboarding` and `.keypad__pad` set
+   `display: flex`, which meant dismissing the onboarding card and switching entry
+   pads changed the property and nothing on screen.
+
+   The DOM tests could not catch this: jsdom reports `element.hidden` as true
+   regardless, and does not load this stylesheet. It was found by looking at the
+   running app, which is the only place it was visible. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -143,4 +157,229 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* The board.
+
+   Sized by min() so it never outgrows its container or the viewport height. The
+   cap matters for store screenshots: a CSS viewport wider than the cap does not
+   produce a bigger board, only more empty space. Plan section 9.6. */
+
+.board {
+  --board-cap: 30rem;
+  /* Never smaller than this, whatever the viewport. The height term below can go
+     negative in a short viewport — a 319px-tall pane makes `100dvh - 20rem` about
+     −1px — and `min()` would then pick it and collapse the board to nothing. The
+     `max()` is the floor that stops that. Found by looking at the running app in a
+     short pane; no unit test would have shown it. */
+  --board-floor: 14rem;
+  display: grid;
+  grid-template-rows: repeat(var(--board-size), 1fr);
+  gap: 2px;
+  width: min(100%, max(var(--board-floor), calc(100dvh - 20rem)), var(--board-cap));
+  aspect-ratio: 1;
+  padding: 2px;
+  background: var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.board__row {
+  display: grid;
+  grid-template-columns: repeat(var(--board-size), 1fr);
+  gap: 2px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--colour-surface-raised);
+  color: var(--colour-ink);
+  font: inherit;
+  font-size: clamp(0.75rem, calc(28rem / var(--board-size)), 1.6rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* Removes the WebView's double-tap-zoom wait, kills the grey flash, and stops
+     a long press raising a selection handle over the board. Plan section 8.3. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.cell--block {
+  background: var(--colour-surface);
+}
+
+.cell[data-editable='true'] {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--colour-line);
+}
+
+.cell[data-editable='false'] {
+  font-weight: 600;
+}
+
+.cell[data-editable='true']:active {
+  background: var(--colour-group);
+}
+
+.cell:focus-visible {
+  outline: 3px solid var(--colour-accent);
+  outline-offset: -3px;
+  z-index: 1;
+}
+
+/* Grouping cue for multi-cell numbers. Plan section 8.5.
+
+   A tinted background plus squared-off inner corners, so the digits of one number
+   read as a single joined block. Without it a player cannot tell 1 5 from two
+   separate operands, which is the misreading most likely to make correct answers
+   look rejected. */
+
+.cell[data-group] {
+  background: var(--colour-group);
+}
+
+.cell[data-group~='start'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.cell[data-group~='middle'] {
+  border-radius: 0;
+}
+
+.cell[data-group~='end'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Equation state, on the equals cell.
+
+   Two channels, never colour alone: a glyph and a weight change alongside the
+   hue. Red and green is exactly the encoding that fails most often, and this is a
+   three-state distinction. Plan section 8.8. */
+
+.cell[data-kind='equals'] {
+  position: relative;
+  color: var(--colour-ink-muted);
+}
+
+.cell[data-equation-state='satisfied']::after,
+.cell[data-equation-state='unsatisfied']::after {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 0.6em;
+  line-height: 1;
+}
+
+.cell[data-equation-state='satisfied'] {
+  color: var(--colour-accent);
+  font-weight: 700;
+}
+
+.cell[data-equation-state='satisfied']::after {
+  content: '✓';
+}
+
+.cell[data-equation-state='unsatisfied'] {
+  color: var(--colour-line-strong);
+  font-weight: 700;
+}
+
+.cell[data-equation-state='unsatisfied']::after {
+  content: '✗';
+}
+
+.cell[data-wrong='true'][data-editable='true'] {
+  box-shadow: inset 0 0 0 2px var(--colour-line-strong);
+}
+
+/* The keypad */
+
+.keypad {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.keypad__pad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  max-width: min(100%, 22rem);
+}
+
+.keypad__pad--digits .keypad__key {
+  flex: 1 1 3rem;
+}
+
+.keypad__key {
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.keypad__clear {
+  min-width: 6rem;
+}
+
+/* Controls */
+
+.controls {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.controls__timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-ink-muted);
+  min-width: 4rem;
+  text-align: center;
+}
+
+/* Onboarding */
+
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--colour-surface-raised);
+  border: 1px solid var(--colour-line);
+  border-radius: var(--radius);
+}
+
+.onboarding h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.onboarding p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.onboarding__example {
+  font-variant-numeric: tabular-nums;
+  color: var(--colour-ink-muted);
+}
+
+.onboarding .button {
+  align-self: flex-start;
+}
+
+.status--version {
+  text-align: center;
+  font-size: 0.75rem;
 }

@@ -10,11 +10,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:slow": "vitest run --config vitest.slow.config.ts"
+    "test:slow": "vitest run --config vitest.slow.config.ts",
+    "size": "node scripts/check-size.mjs"
   },
   "type": "module",
   "devDependencies": {
     "@types/node": "26.3.0",
+    "jsdom": "27.0.0",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vite-plugin-pwa": "1.3.0",

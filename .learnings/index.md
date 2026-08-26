@@ -31,6 +31,14 @@ true on one machine only. See
   givens, so it cannot be hidden from a determined reader; what is achievable is
   keeping it out of storage. Read before persisting anything derived from a solution.
 
+## User interface
+
+- [dom-tests-do-not-see-css.md](dom-tests-do-not-see-css.md) — jsdom parses no
+  stylesheet, so three real defects passed 46 green DOM tests: `hidden` losing to a
+  layout class, a `min()` width computing negative and collapsing an element, and a
+  glyph with no font coverage. Read before asserting anything visual in a DOM test,
+  or after any layout or visibility change.
+
 ## Platform and storage
 
 - [native-shell-origin.md](native-shell-origin.md) — a Cordova shell must serve from

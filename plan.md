@@ -1062,16 +1062,24 @@ these as CI-enforced ceilings, and treat a breach as a defect:
 
 | Artefact | Ceiling | Rationale |
 |---|---|---|
-| JS, gzipped | 100 KB | No framework, no runtime dependency. The engine is arithmetic and arrays |
-| CSS, gzipped | 15 KB | Two hand-written files, tokens and layout |
-| Icons and static assets | 150 KB | Four PNG icons plus one SVG source |
-| Installed Android app | 5 MB | Dominated by the Cordova shell, not by the bundle |
+| JS, gzipped | 40 KiB | No framework, no runtime dependency. The engine is arithmetic and arrays |
+| CSS, gzipped | 8 KiB | Two hand-written files, tokens and layout |
+| Icons and static assets | 150 KiB | Four PNG icons plus one SVG source |
+| Installed Android app | 5 MiB | Dominated by the Cordova shell, not by the bundle |
 
 Notes on the ceilings:
 
-- The JS and CSS figures are budgets for code this project writes, and they are
-  generous for it. Measure at M3 and tighten them to the measured size plus headroom,
-  rather than leaving slack that silently absorbs a bad dependency.
+- **Measured and tightened at M3.** With the engine, worker, board, keypad, controls
+  and onboarding present, the bundle is 13.0 KiB of JS and 1.7 KiB of CSS gzipped.
+  The ceilings above were lowered from 100 KiB and 15 KiB to roughly triple the
+  measured size — enough for what M4 to M7 add and no more. Generous slack is what
+  lets a bad dependency through unnoticed.
+- The gate runs in `ci.yml` as `npm run size`, and its ceilings live in
+  `scripts/check-size.mjs`. Change them there and here together, and only to lower
+  them: a rise means something was added, which is what the gate is for.
+- The service worker and its workbox runtime are excluded. They are generated rather
+  than written here, so a ceiling on them would police someone else’s code and would
+  move whenever the plugin updates.
 - The bundled starter puzzle from section 5.8 counts against the JS figure. It is one
   Easy board, so the cost is tens of bytes, not kilobytes.
 - The installed-app figure is dominated by the native shell and the WebView glue, not
@@ -1079,8 +1087,7 @@ Notes on the ceilings:
   and set the real ceiling from that, then hold it.
 - Runtime generation is what keeps the app small. Bundled puzzle packs would have
   added megabytes; this design ships an algorithm and one starter board instead.
-- Add a size check to `ci.yml` after M3: fail the build if a gzipped output exceeds
-  its ceiling. A budget with no gate is a comment.
+
 
 The one real threat to these numbers is a dependency added without weighing it.
 `localForage` was considered and rejected in section 7.2, and the size cost was part
@@ -1782,12 +1789,15 @@ Each milestone ends with tests passing in CI.
   far above the measured operating range of 1 to 10. Density targets reset from
   measurement. Measurements and the four decisions that dominated cost are in
   `.learnings/generation-measurements.md`.
-- **M3 — Playable web.** Board rendering, the grouping cue, focus, the numeric pad,
-  per-equation feedback with a non-colour channel, completion detection, the
-  generating state with progress and cancel, undo and redo, the timer, the
-  first-run explainer from section 8.7, and the accessibility work from section 8.8.
-  The touch-response rules from section 8.3. Easy only. Measure the bundle, tighten
-  the section 8.4 ceilings, and add the size gate to `ci.yml`.
+- **M3 — Playable web. Done.** `game/state.ts` with undo and redo, `game/validate.ts`,
+  `game/timer.ts`, `ui/board`, `ui/keypad`, `ui/controls`, `ui/onboarding`, `ui/app`.
+  Board rendering with the grouping cue, roving-tabindex focus, both entry pads,
+  per-equation markers on the equals cells carrying a glyph as well as a hue,
+  completion detection, the bundled starter board, and the accessibility work from
+  section 8.8. Easy only; the difficulty menu is M4. Bundle measured at 13.0 KiB JS
+  and 1.7 KiB CSS gzipped, ceilings tightened accordingly, and the size gate added
+  to `ci.yml`. Three defects found only by running the app in a browser, recorded in
+  `.learnings/dom-tests-do-not-see-css.md`.
 - **M4 — Difficulty breadth.** Medium and Hard generation. Negative values, division,
   the operator pad, operator masking. Settle Hard's operator masking percentage from
   the M0.5 result and the mask-density assertion.
