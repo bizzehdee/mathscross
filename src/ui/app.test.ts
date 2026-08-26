@@ -12,7 +12,7 @@ import { parametersFor } from '../engine/difficulty'
 import { solve } from '../engine/solver'
 import { STARTER_DIFFICULTY, starterGrid } from '../engine/starter'
 import { CellKind, EMPTY } from '../engine/types'
-import { loadStats, type StorageLike } from '../game/persist'
+import { loadBoard, loadStats, type StorageLike } from '../game/persist'
 import { mountApp, type AppOptions } from './app'
 
 /**
@@ -31,6 +31,17 @@ function memoryStorage(): StorageLike {
     },
     removeItem: (key) => {
       data.delete(key)
+    },
+  }
+}
+
+/** A clock the test moves by hand, so nothing waits for real time. */
+function fakeClock(): { now: () => number; advance: (ms: number) => void } {
+  let value = 1_000
+  return {
+    now: () => value,
+    advance: (ms) => {
+      value += ms
     },
   }
 }
@@ -295,6 +306,48 @@ describe('starting and playing a puzzle', () => {
     )
     // The label says what would be resumed, so the choice is informed.
     expect(button(root, 'Continue easy').getAttribute('aria-label')).toContain('cells left')
+  })
+
+  it('saves the time played up to the moment the board is left, not the last entry', async () => {
+    // The defect this covers: the elapsed total was written only when a cell
+    // changed, and nothing stopped the clock on leaving the board. A player who
+    // entered a digit, thought for half a minute and went back to the menu
+    // resumed at the time of the digit, so thinking time was quietly discounted
+    // and the menu's "time played" read low.
+    const storage = memoryStorage()
+    const clock = fakeClock()
+    const root = mountReady({ storage, client: starterClient(), clock: clock.now })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    editable(root)[0]?.click()
+    keypadDigit(root, 4).click()
+
+    clock.advance(30_000)
+    button(root, 'Menu').click()
+
+    expect(loadBoard('free', storage)?.elapsedMs).toBe(30_000)
+  })
+
+  it('stops the clock on the menu, and starts it again on returning', async () => {
+    const storage = memoryStorage()
+    const clock = fakeClock()
+    const root = mountReady({ storage, client: starterClient(), clock: clock.now })
+    button(root, 'Easy').click()
+    await Promise.resolve()
+
+    button(root, 'Menu').click()
+    clock.advance(120_000)
+    button(root, 'Continue easy').click()
+
+    // Two minutes on the menu are not two minutes of play.
+    expect(loadBoard('free', storage)?.elapsedMs).toBe(0)
+
+    clock.advance(5_000)
+    editable(root)[0]?.click()
+    keypadDigit(root, 4).click()
+
+    expect(loadBoard('free', storage)?.elapsedMs).toBe(5_000)
   })
 
   it('reaches the solved state and records one completion', async () => {

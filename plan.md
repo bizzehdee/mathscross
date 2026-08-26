@@ -959,6 +959,22 @@ and on the Cordova pause event, and resume on the corresponding resume. Without 
 a puzzle resumed across three sittings reports a nine-hour best time and every
 time-based stat becomes worthless.
 
+**Also pause on `pagehide`, and whenever the board is not the visible screen.** And
+**write the elapsed total down on every pause**, not only when a cell changes.
+
+Found by playing the deployed build: three seconds of play, then the menu, then
+continue, and the clock read `0:00`. Persisting on entry alone loses the time between
+the last entry and leaving, so a player who thinks and then walks away is quietly
+discounted, and the menu's "time played" reads low. Completed puzzles were unaffected,
+because a solve records the live timer rather than the stored total — which is why
+nothing in the stats looked wrong.
+
+The millisecond clock is injected into `mountApp` for the same reason it is injected
+into the timer: a test that waits for real time to pass cannot assert on elapsed time,
+so it asserts nothing, and this defect sat under 207 passing tests with
+`bindTimerToVisibility` having no test of its own at all. See
+`.learnings/pausing-a-clock-is-not-recording-it.md`.
+
 ### 7.4 Daily and streak semantics
 
 - The daily slot holds **today only**. On opening the app on a new UTC date, an

@@ -37,7 +37,7 @@ import {
   undo,
   type GameState,
 } from '../game/state'
-import { bindTimerToVisibility, createTimer, type Timer } from '../game/timer'
+import { bindTimerToVisibility, createTimer, type Clock, type Timer } from '../game/timer'
 import { createBoardView, type BoardView } from './board/board'
 import { createCompletionView } from './completion/completion'
 import { createControlsView } from './controls/controls'
@@ -58,6 +58,14 @@ export interface AppOptions {
   readonly storage?: StorageLike
   /** Injected so tests can fix "today" rather than depending on the clock. */
   readonly now?: () => Date
+  /**
+   * The millisecond clock the play timer reads.
+   *
+   * Injected for the same reason `now` is: a test that has to wait for real time
+   * to pass cannot assert anything about elapsed time, so it asserts nothing and
+   * the timer's interaction with saving and navigation goes uncovered.
+   */
+  readonly clock?: Clock
   /** The element carrying `data-theme`. Defaults to the document root. */
   readonly themeRoot?: HTMLElement
 }
@@ -69,6 +77,10 @@ interface Session {
   readonly timer: Timer
   readonly dateKey: string | null
   readonly dispose: () => void
+  /** Stops the clock and writes the elapsed total down. Safe to call twice. */
+  readonly suspend: () => void
+  /** Restarts the clock on returning to the board. Safe to call twice. */
+  readonly activate: () => void
   recorded: boolean
 }
 
@@ -198,7 +210,22 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   let noticeTimer: number | null = null
   let lastAnnouncement = ''
 
-  router.onChange((screen) => showScreen(screen))
+  router.onChange((screen) => {
+    showScreen(screen)
+    // A board nobody is looking at is not being played. Without this the clock
+    // ran on the menu, and — because the elapsed total was only written on a
+    // move — resuming restored the time of the last entry rather than the time
+    // the player actually left, so walking away quietly discounted the clock.
+    //
+    // Both directions, not just the suspend: `start` resets to home before going
+    // to the game, so a new session is suspended on its way past and would stay
+    // stopped for the whole board without the matching activate.
+    if (screen === 'game') {
+      session?.activate()
+    } else {
+      session?.suspend()
+    }
+  })
 
   // A lapsed streak is zeroed when the app opens, because nothing runs on the day
   // a player does not open it. Plan section 7.4.
@@ -241,8 +268,11 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
   /**
    * Leaves the current screen.
    *
-   * A game is left rather than abandoned: it is saved on every entry already, so
-   * walking away and coming back is the same as never leaving.
+   * A game is left rather than abandoned: walking away and coming back is the
+   * same as never leaving. Entries are saved as they are made, and the router
+   * stops the clock and records the elapsed total on the way out — an earlier
+   * version relied on the entries alone, which meant the time between the last
+   * entry and leaving was thrown away.
    */
   function leaveScreen(): void {
     completion.hide()
@@ -336,13 +366,15 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       state.historyIndex = restored.historyIndex
     }
 
-    const timer = createTimer()
+    const timer = createTimer(options.clock)
     timer.start()
     if (restored !== undefined) {
       timer.restore(restored.elapsedMs)
       timer.resume()
     }
-    const detachVisibility = bindTimerToVisibility(timer)
+    // `persist` as the pause callback: a hidden tab, a locked phone and a closing
+    // page all stop the clock, and each one has to write down where it stopped.
+    const detachVisibility = bindTimerToVisibility(timer, document, () => persist())
 
     const board = createBoardView(state, {
       onSelect: (cell) => showPadFor(cell),
@@ -385,10 +417,29 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       timer,
       dateKey,
       recorded: false,
+      suspend: () => {
+        if (!timer.running) {
+          return
+        }
+        timer.pause()
+        persist()
+      },
+      activate: () => {
+        // Not a solved board: its time is already final and recorded, and
+        // restarting the clock on it would report a longer solve than the one
+        // that was banked.
+        if (timer.running || document.hidden || board.status.board === 'solved') {
+          return
+        }
+        timer.resume()
+      },
       dispose: () => {
         window.clearInterval(tick)
         detachVisibility()
+        // Recorded before the timer is discarded, so replacing a session does not
+        // throw away the time the outgoing board had run since its last entry.
         timer.pause()
+        persist()
       },
     }
 

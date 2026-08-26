@@ -33,6 +33,12 @@ true on one machine only. See
 
 ## User interface
 
+- [pausing-a-clock-is-not-recording-it.md](pausing-a-clock-is-not-recording-it.md)
+  — the play clock was persisted only when a cell changed and not paused on leaving
+  the board, so resuming discounted every idle stretch; `pagehide` is a window
+  event; and the defect was untestable until the clock was injected into
+  `mountApp`. Read before touching the timer, the save points, or screen
+  navigation.
 - [dom-tests-do-not-see-css.md](dom-tests-do-not-see-css.md) — jsdom parses no
   stylesheet, so three real defects passed 46 green DOM tests: `hidden` losing to a
   layout class, a `min()` width computing negative and collapsing an element, and a

@@ -58,31 +58,54 @@ export function createTimer(clock: Clock = () => Date.now()): Timer {
 }
 
 /**
- * Pauses a timer whenever the document is hidden, and on the Cordova pause event.
+ * Pauses a timer whenever the document is hidden, on the Cordova pause event, and
+ * as the page goes away.
  *
- * Both are needed: `visibilitychange` covers a backgrounded browser tab and a
- * locked phone, and Cordova's own `pause` and `resume` fire in the shell where
- * the web event is less reliable. Returns a function that detaches both.
+ * All three are needed: `visibilitychange` covers a backgrounded browser tab and
+ * a locked phone, Cordova's own `pause` and `resume` fire in the shell where the
+ * web event is less reliable, and `pagehide` is the last event a closing or
+ * navigating tab reliably delivers.
+ *
+ * `onPause` runs after every pause, and is the caller's chance to write the
+ * elapsed total down. A timer that pauses without being recorded loses whatever
+ * has run since the last save, which is why this exists rather than the caller
+ * binding its own second visibility listener and hoping the two agree on order.
+ *
+ * Returns a function that detaches all of them.
  */
-export function bindTimerToVisibility(timer: Timer, target: Document = document): () => void {
+export function bindTimerToVisibility(
+  timer: Timer,
+  target: Document = document,
+  onPause?: () => void,
+): () => void {
+  const pause = (): void => {
+    timer.pause()
+    onPause?.()
+  }
   const onVisibility = (): void => {
     if (target.hidden) {
-      timer.pause()
+      pause()
     } else {
       timer.resume()
     }
   }
-  const onPause = (): void => timer.pause()
   const onResume = (): void => timer.resume()
 
+  // On the window, not the document: pagehide is a window event, and a document
+  // listener would never fire. The others are document events because Cordova
+  // dispatches pause and resume there.
+  const view = target.defaultView
+
   target.addEventListener('visibilitychange', onVisibility)
-  target.addEventListener('pause', onPause)
+  target.addEventListener('pause', pause)
   target.addEventListener('resume', onResume)
+  view?.addEventListener('pagehide', pause)
 
   return () => {
     target.removeEventListener('visibilitychange', onVisibility)
-    target.removeEventListener('pause', onPause)
+    target.removeEventListener('pause', pause)
     target.removeEventListener('resume', onResume)
+    view?.removeEventListener('pagehide', pause)
   }
 }
 
