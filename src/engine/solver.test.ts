@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parametersFor, Difficulty } from './difficulty'
 import { hasUniqueSolution, solve } from './solver'
-import { gridFromText, referenceGrid, singleRowGrid } from './test-fixtures'
+import { gridFromText } from './grid'
+import { referenceGrid, singleRowGrid } from './test-fixtures'
 import { Operator } from './types'
 
 const EASY = parametersFor(Difficulty.Easy)

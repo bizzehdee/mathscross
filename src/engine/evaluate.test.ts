@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { boardState, equationState, readNumber } from './evaluate'
 import { parseGrid, type NumberToken } from './parse'
-import { gridFromText, referenceGrid, singleRowGrid } from './test-fixtures'
+import { gridFromText } from './grid'
+import { referenceGrid, singleRowGrid } from './test-fixtures'
 
 /** The state of the only equation in a single-row fixture. */
 function stateOf(cells: string): string {

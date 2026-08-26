@@ -353,3 +353,92 @@ function describeSide(tokens: readonly Token[]): string | null {
 export function describeCell(size: number, index: number): string {
   return `r${cellRow(size, index)}c${cellColumn(size, index)}`
 }
+
+/** The three numbers and the operator of an `a op b = c` equation. */
+export interface BinaryShape {
+  readonly left: NumberToken
+  readonly right: NumberToken
+  readonly result: NumberToken
+  readonly operatorCell: number
+}
+
+/**
+ * Reads an equation as `a op b = c`, or null for any other shape.
+ *
+ * The only shape the mesh builds, and the only one the fill and the solver's
+ * number-level propagation know how to reason about. Returning null rather than
+ * throwing means an equation with two operators — which a future mesh could
+ * produce — simply falls back to cell-level search instead of breaking.
+ */
+export function binaryShape(equation: Equation): BinaryShape | null {
+  const tokens = equation.tokens
+  if (tokens.length !== 5) {
+    return null
+  }
+  const [left, operator, right, equals, result] = tokens
+  if (
+    left?.kind !== 'number' ||
+    operator?.kind !== 'operator' ||
+    operator.role !== 'binary' ||
+    right?.kind !== 'number' ||
+    equals?.kind !== 'equals' ||
+    result?.kind !== 'number'
+  ) {
+    return null
+  }
+  return { left, right, result, operatorCell: operator.cell }
+}
+
+/**
+ * Equations ordered so each shares a cell with one already processed.
+ *
+ * Filling a disconnected equation first wastes the constraint: the point of an
+ * intersection is that the crossing equation inherits fixed digits. Breadth-first
+ * from the first equation gives that, and the mesh guarantees a single connected
+ * component so every equation is reached.
+ */
+export function orderEquations(parsed: ParsedGrid): Equation[] {
+  const { equations } = parsed
+  if (equations.length === 0) {
+    return []
+  }
+
+  const ordered: Equation[] = []
+  const taken = new Set<number>()
+  const queue: number[] = [0]
+  taken.add(0)
+
+  while (queue.length > 0) {
+    const index = queue.shift()
+    if (index === undefined) {
+      continue
+    }
+    const equation = equations[index]
+    if (equation === undefined) {
+      continue
+    }
+    ordered.push(equation)
+
+    for (const cell of equation.cells) {
+      for (const neighbour of parsed.equationsByCell[cell] ?? []) {
+        if (!taken.has(neighbour)) {
+          taken.add(neighbour)
+          queue.push(neighbour)
+        }
+      }
+    }
+  }
+
+  // A mesh is connected, so this should not trigger. Kept so a future mesh that
+  // is not connected fills what it can rather than silently dropping equations.
+  for (let index = 0; index < equations.length; index += 1) {
+    if (!taken.has(index)) {
+      const equation = equations[index]
+      if (equation !== undefined) {
+        ordered.push(equation)
+      }
+    }
+  }
+
+  return ordered
+}

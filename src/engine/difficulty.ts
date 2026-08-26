@@ -72,7 +72,10 @@ const MEDIUM: DifficultyParameters = {
   minIntersections: 5,
   maxIntersections: 8,
   allowNegative: true,
-  digitMaskRatio: 0.6,
+  // 0.50, not the 0.60 the plan first specified. M0.5 predicted this from a
+  // hand-built board that could only reach 0.42, and M2 measured 0.53 achieved
+  // against a 0.60 target across 60 seeds. Set to what uniqueness allows.
+  digitMaskRatio: 0.5,
   operatorMaskRatio: 0.3,
 }
 
@@ -89,11 +92,19 @@ const HARD: DifficultyParameters = {
   // mesh has a range to satisfy rather than an open-ended target.
   maxIntersections: 25,
   allowNegative: true,
-  digitMaskRatio: 0.75,
-  // Provisional. Plan section 2.7 demotes 100% operator masking to a hypothesis:
-  // untested against enjoyment, and untested against whether uniqueness survives
-  // it. M0.5 already found one case where it does not — `2 ? 32 = ?4` admits both
-  // `+` and `*` — so expect this to settle lower at M4.
+  // 0.45, not the 0.75 the plan first specified. Measured at M2: 0.75 is not
+  // reachable at any acceptable cost. A uniqueness check on a 9x9 grows
+  // exponentially with the blank count — 1 ms at 5 blanks, 48 ms at 15, over
+  // 2000 ms at 19 — so masking to 29 of 39 digit cells takes minutes per puzzle.
+  // Achieved is 0.46, so this target is met rather than merely approached.
+  //
+  // Raising it needs a stronger solver, not a bigger budget: bounds propagation
+  // over partially known numbers would prune where the current forward check
+  // cannot. Recorded in .learnings/generation-measurements.md as the way back.
+  digitMaskRatio: 0.45,
+  // 100% operator masking, and it holds. M0.5 doubted this and the plan demoted it
+  // to a hypothesis; M2 measured it reached in full, but only once operators were
+  // masked *before* digits. With digits first it reached 14%. See mask.ts rule 1.
   operatorMaskRatio: 1,
 }
 

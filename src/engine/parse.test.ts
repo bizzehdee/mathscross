@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isLegal, parseGrid, type NumberToken, type OperatorToken } from './parse'
-import { gridFromText, referenceGrid, singleRowGrid } from './test-fixtures'
+import { gridFromText } from './grid'
+import { referenceGrid, singleRowGrid } from './test-fixtures'
 import { CellKind } from './types'
 
 /** Renders an equation's tokens compactly, for readable assertions. */

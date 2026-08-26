@@ -18,7 +18,20 @@
  */
 import { equationState } from './evaluate'
 import { assignableAmong, cloneValues, isAssignable } from './grid'
-import { parseGrid, type Equation, type ParsedGrid } from './parse'
+import {
+  binaryShape,
+  orderEquations,
+  parseGrid,
+  type Equation,
+  type ParsedGrid,
+} from './parse'
+import {
+  isFullyUnknown,
+  knownValue,
+  solveForMissing,
+  writeNumberIfConsistent,
+} from './numbers'
+import type { Rng } from './rng'
 import { ALL_OPERATORS, CellKind, EMPTY, Operator, type Grid } from './types'
 
 /**
@@ -36,7 +49,34 @@ export interface SolveOptions {
   readonly maxSolutions?: number
   /** Reuse a parse rather than repeating it. The generator parses once. */
   readonly parsed?: ParsedGrid
+  /**
+   * Shuffles each cell's candidate order.
+   *
+   * Without this, `solve` returns the lexicographically first solution, so a
+   * given mesh and operator assignment always fills to the same values and every
+   * puzzle from that mesh would be identical. The generator passes its seeded
+   * Rng here, which keeps the fill varied *and* reproducible — both of which the
+   * daily puzzle needs. Omit it for uniqueness checking, where order is
+   * irrelevant and shuffling is wasted work.
+   */
+  readonly rng?: Rng
+  /**
+   * Search nodes before the solve gives up. Default .
+   *
+   * A uniqueness check on a heavily masked 9x9 grows exponentially with the blank
+   * count: measured at M2, one check cost 1 ms at 5 blanks, 48 ms at 15 and over
+   * 2000 ms at 19, against a Hard target of 29. Masking to target would take
+   * minutes per puzzle.
+   *
+   * Exceeding the budget sets `truncated`, and `hasUniqueSolution` then answers
+   * false. That is deliberately conservative: the generator refuses a mask it
+   * cannot cheaply prove safe, so a shipped puzzle is never ambiguous, and the
+   * cost is achieved density rather than correctness.
+   */
+  readonly maxNodes?: number
 }
+
+export const DEFAULT_MAX_NODES = 20_000
 
 export interface SolveResult {
   /** Solutions found, capped at `maxSolutions`. */
@@ -47,11 +87,19 @@ export interface SolveResult {
   readonly techniques: ReadonlySet<Technique>
   /** True when the grid is illegal, in which case nothing was searched. */
   readonly illegal: boolean
+  /** True when the node budget ran out, so the count is a lower bound. */
+  readonly truncated: boolean
 }
 
-/** Whether a masked grid has exactly one solution. */
+/**
+ * Whether a masked grid is *provably* uniquely solvable within the node budget.
+ *
+ * False when the budget ran out, even if only one solution was found. A caller
+ * masking cells needs a guarantee, and "probably unique" is not one.
+ */
 export function hasUniqueSolution(grid: Grid, options: SolveOptions = {}): boolean {
-  return solve(grid, { ...options, maxSolutions: 2 }).count === 1
+  const result = solve(grid, { ...options, maxSolutions: 2 })
+  return result.count === 1 && !result.truncated
 }
 
 /**
@@ -75,24 +123,31 @@ export function solve(grid: Grid, options: SolveOptions = {}): SolveResult {
   const techniques = new Set<Technique>()
 
   if (parsed.problems.length > 0) {
-    return { count: 0, first: null, techniques, illegal: true }
+    return { count: 0, first: null, techniques, illegal: true, truncated: false }
   }
 
-  const compiled = compile(grid, parsed, operators)
+  const compiled = compile(grid, parsed, operators, options.rng)
   const values = cloneValues(grid)
   const solutions: Int8Array[] = []
+  const budget = { remaining: options.maxNodes ?? DEFAULT_MAX_NODES }
 
-  search(grid, compiled, values, solutions, maxSolutions, techniques)
+  search(grid, compiled, values, solutions, maxSolutions, techniques, budget)
 
   return {
     count: solutions.length,
     first: solutions[0] ?? null,
     techniques,
     illegal: false,
+    truncated: budget.remaining <= 0,
   }
 }
 
-function compile(grid: Grid, parsed: ParsedGrid, operators: readonly Operator[]): Compiled {
+function compile(
+  grid: Grid,
+  parsed: ParsedGrid,
+  operators: readonly Operator[],
+  rng?: Rng,
+): Compiled {
   const domains: number[][] = Array.from({ length: grid.kinds.length }, () => [])
   const variables: number[] = []
 
@@ -125,23 +180,57 @@ function compile(grid: Grid, parsed: ParsedGrid, operators: readonly Operator[])
     }
   }
 
-  // Most-constrained first, then by how many equations the cell sits in, then by
-  // index. The last term is what makes the order deterministic when the first two
-  // tie, which they often do.
-  variables.sort((a, b) => {
-    const sizeDifference = (domains[a]?.length ?? 0) - (domains[b]?.length ?? 0)
-    if (sizeDifference !== 0) {
-      return sizeDifference
+  // Shuffle candidate order when asked. Applied after every domain is built, so
+  // a domain's contents are unchanged and only the order in which the search
+  // tries them varies. Still fully deterministic: the Rng is seeded.
+  if (rng !== undefined) {
+    for (const cell of variables) {
+      const domain = domains[cell]
+      if (domain !== undefined) {
+        rng.shuffle(domain)
+      }
     }
-    const equationDifference =
-      (parsed.equationsByCell[b]?.length ?? 0) - (parsed.equationsByCell[a]?.length ?? 0)
-    if (equationDifference !== 0) {
-      return equationDifference
-    }
-    return a - b
-  })
+  }
 
-  return { parsed, variables, domains }
+  return { parsed, variables: orderVariables(variables, parsed), domains }
+}
+
+/**
+ * Orders variables equation by equation, in reading order within each.
+ *
+ * Not most-constrained-first, which is the usual heuristic and was the first
+ * implementation. Most-constrained-first interleaves cells from different
+ * equations, so no equation ever completes early and the forward check has
+ * nothing to reject — a 60%-masked Medium board took 19 seconds to check for
+ * uniqueness.
+ *
+ * Grouping by equation means every few assignments finish one, at which point the
+ * equation check prunes the whole subtree and number-level propagation can derive
+ * the remaining terms. Equations come in breadth-first order so each shares cells
+ * with one already assigned, inheriting its fixed digits.
+ *
+ * Cells in no equation cannot exist in a legal grid, but are appended rather than
+ * dropped so an illegal grid still terminates.
+ */
+function orderVariables(variables: readonly number[], parsed: ParsedGrid): number[] {
+  const pending = new Set(variables)
+  const ordered: number[] = []
+
+  for (const equation of orderEquations(parsed)) {
+    for (const cell of equation.cells) {
+      if (pending.delete(cell)) {
+        ordered.push(cell)
+      }
+    }
+  }
+
+  for (const cell of variables) {
+    if (pending.delete(cell)) {
+      ordered.push(cell)
+    }
+  }
+
+  return ordered
 }
 
 function isSignCell(parsed: ParsedGrid, cell: number): boolean {
@@ -173,10 +262,12 @@ function search(
   solutions: Int8Array[],
   maxSolutions: number,
   techniques: Set<Technique>,
+  budget: { remaining: number },
 ): void {
-  if (solutions.length >= maxSolutions) {
+  if (solutions.length >= maxSolutions || budget.remaining <= 0) {
     return
   }
+  budget.remaining -= 1
 
   const working = { size: grid.size, kinds: grid.kinds, values }
 
@@ -199,8 +290,9 @@ function search(
     const snapshot = new Int8Array(values)
     values[next] = candidate
     if (!violates(working, compiled, next)) {
-      search(grid, compiled, values, solutions, maxSolutions, techniques)
-      if (solutions.length >= maxSolutions) {
+      search(grid, compiled, values, solutions, maxSolutions, techniques, budget)
+      if (solutions.length >= maxSolutions || budget.remaining <= 0) {
+        values.set(snapshot)
         return
       }
     }
@@ -225,6 +317,22 @@ function propagate(
 
   while (changed) {
     changed = false
+
+    // Number level first. Plan section 6.2: when two of an equation's three
+    // numbers and its operator are known, compute the third and write its digits
+    // rather than searching each cell.
+    //
+    // This is not an optimisation, it is what makes the solver usable. Cell-level
+    // propagation alone only fires when an equation has a single empty *cell*,
+    // which on a 60%-masked Medium board is almost never true early — so nothing
+    // pruned, and a uniqueness check that should cost milliseconds took 16 seconds.
+    const numeric = propagateNumbers(working, compiled, techniques)
+    if (numeric === 'contradiction') {
+      return 'contradiction'
+    }
+    if (numeric === 'changed') {
+      changed = true
+    }
 
     for (const equation of compiled.parsed.equations) {
       const empties = assignableAmong(working, equation.cells)
@@ -266,6 +374,77 @@ function propagate(
   }
 
   return 'ok'
+}
+
+/**
+ * Derives whole numbers whose value follows arithmetically.
+ *
+ * For each `a op b = c` equation with a known operator, exactly one fully unknown
+ * number and the other two fully known, computes the missing one and writes its
+ * digits. A value that does not fit its cells, carries a leading zero, or
+ * contradicts a digit a crossing equation fixed is a contradiction, not a skip.
+ */
+function propagateNumbers(
+  working: Grid,
+  compiled: Compiled,
+  techniques: Set<Technique>,
+): 'ok' | 'changed' | 'contradiction' {
+  let changed = false
+
+  for (const equation of compiled.parsed.equations) {
+    const shape = binaryShape(equation)
+    if (shape === null) {
+      continue
+    }
+
+    const operator = working.values[shape.operatorCell]
+    if (operator === undefined || operator === EMPTY) {
+      continue
+    }
+
+    const terms = [shape.left, shape.right, shape.result] as const
+    const unknown = terms.filter((term) => isFullyUnknown(working, term))
+    if (unknown.length !== 1) {
+      continue
+    }
+    const target = unknown[0]
+    if (target === undefined) {
+      continue
+    }
+
+    const values = terms.map((term) =>
+      term === target ? undefined : (knownValue(working, term) ?? undefined),
+    )
+    // A term that is partially filled reads as unknown here, which would leave
+    // two unknowns and nothing to derive. Require exactly one gap: the target.
+    if (values.filter((value) => value === undefined).length !== 1) {
+      continue
+    }
+    const [a, b, c] = values
+
+    const derived = solveForMissing(operator as Operator, {
+      ...(a === undefined ? {} : { a }),
+      ...(b === undefined ? {} : { b }),
+      ...(c === undefined ? {} : { c }),
+    })
+    if (derived === null) {
+      return 'contradiction'
+    }
+    if (!writeNumberIfConsistent(working, target, derived)) {
+      return 'contradiction'
+    }
+
+    // Derived from two other numbers in this equation, which is arithmetic rather
+    // than a search: `direct`. A cell shared with another equation makes it
+    // `domain`, because the crossing equation is what fixed the inputs.
+    const crossed = target.cells.some(
+      (cell) => (compiled.parsed.equationsByCell[cell] ?? []).length > 1,
+    )
+    techniques.add(crossed ? 'domain' : 'direct')
+    changed = true
+  }
+
+  return changed ? 'changed' : 'ok'
 }
 
 /** Values for `cell` that leave `equation` satisfied, given everything else. */

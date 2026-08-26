@@ -21,6 +21,7 @@ true on one machine only. See
   uniqueness, a hand-built Medium reached 42% against a 60% target, and an operator
   mask is not cheaper than a digit mask. Read before changing masking order, the
   intersection ranges, or the mask density assertion.
+- [generation-measurements.md](generation-measurements.md) — MathsCross's own measured cost per difficulty, and the four decisions that dominated it: the solver cannot fill an empty grid, derive the widest term, cell-count filtering admits impossible patterns, and variable order decides whether uniqueness checking is feasible. Also why operators must be masked before digits. Read before changing the attempt cap, the node budget, the masking order, or any density target.
 - [generation-cost-follows-rejection-rate.md](generation-cost-follows-rejection-rate.md)
   — cost is driven by how many seeds a difficulty rejects, not by how hard it plays,
   so the hardest grade need not be the slowest; and an attempt cap set from intuition

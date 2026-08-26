@@ -314,8 +314,8 @@ across the generator, the solver, and the UI.
 | Intersection count | 2 to 4 | 5 to 8 | 10 or more |
 | Division | not used | integer results only | integer results only |
 | `allowNegative` | false | true | true |
-| Digit masking | 40% | 60% | 75% |
-| Operator masking | 0% | 30% | 100%, provisional |
+| Digit masking | 40% | 50% | 45% |
+| Operator masking | 0% | 30% | 100% |
 
 Notes on this table:
 
@@ -323,15 +323,21 @@ Notes on this table:
   teaching the game. Its parameters are unchanged and are already gentle: single
   digits, `+` and `-` only, and no masked operators. What Easy gains instead is the
   onboarding requirement in section 8.7.
-- **Hard's 100% operator masking is a hypothesis, not a specification.** It is
-  untested against two independent risks. Enjoyment: with every operator unknown, a
-  player solves structure and arithmetic simultaneously across a 9 x 9 with ten or
-  more intersections, which may be past the point of fun. Generator behaviour:
-  uniqueness may be unreachable at that density, so the restore-on-failure loop in
-  section 5.4 would claw cells back until achieved masking lands far below target —
-  silently turning Hard into Medium and collapsing the top of the ladder. M0.5
-  tests the first risk by hand; section 13.4 asserts against the second. Expect to
-  settle nearer 60 to 70%.
+- **The mask ratios are measured, not chosen.** M2 measured all three difficulties
+  over 60 seeds and set each target to what uniqueness actually allows. Digit
+  masking moved from 60% to 50% at Medium and from 75% to 45% at Hard; both are now
+  met rather than merely approached. Raising them again needs a stronger solver, not
+  a bigger time budget: see `.learnings/generation-measurements.md` for the specific
+  missing capability.
+- **Hard's 100% operator masking holds.** M0.5 doubted it and this section
+  previously demoted it to a hypothesis. M2 measured it reached in full — but only
+  once operators are masked *before* digits. Masking digits first left Hard at 14%
+  while Medium reached 40%, inverting the ladder on its most distinctive dimension.
+  It was never the density that was wrong, only the order. Section 5.4 step 1.
+- **Hard shows more digit givens than Medium**, at 45% against 50%. That is
+  deliberate and it is not a ladder inversion: Hard hides *every* operator, uses
+  three-digit values and division, and runs on a 9 x 9. Operator masking is the
+  dominant difficulty lever, and it is the scarce one.
 - `--tap-min` is 44 px at every difficulty. The enlarged target existed only for the
   Kids tier.
 
@@ -547,11 +553,17 @@ thread.
      reference board.
    - Every non-`block` cell must belong to at least one equation, per section 2.4.
    - The graph of connected equations must form a single connected component.
-   - The intersection count must fall in the difficulty's range. **Prefer the top of
-     that range.** Intersection cells are the ones that survive masking, so
-     intersection density is a lever on achievable mask density rather than a free
-     parameter. Section 5.4 step 2 and
-     `.learnings/masking-is-limited-by-weakly-constrained-cells.md`.
+   - The intersection count must fall in the difficulty's range. **Prefer the bottom
+     of that range.** M0.5 suggested the top, reasoning that intersection cells
+     survive masking; M2 measured the opposite trade dominating. Intersections make
+     the *fill* harder at a punishing rate — at Hard the top of the range is 25,
+     which on a 9 x 9 means 45 interlocking, doubly-constrained digit cells — while
+     the masking benefit is already captured by the ordering in section 5.4. Satisfy
+     the minimum and stop.
+   - **Reject width triples no operator can satisfy.** Filtering on cell count alone
+     admits arithmetically impossible patterns, and they are not rare: `dd op ddd =
+     dd` fits nine cells exactly and can never hold. Interval arithmetic over the
+     three width ranges removes them before a fill is attempted.
 4. Stop when the intersection count is met and no further segment can be placed.
 
 The mesh must also fix **operand cell widths**. For each equation, decide how many
@@ -568,18 +580,38 @@ generator bugs, so assert width consistency at the end of phase 1.
 
 ### 5.2 Phase 2 — operator and value fill
 
-1. Assign an operator to each `binary` operator cell from the difficulty's allowed
-   set, using the seeded PRNG. Assign `-` to every `sign` cell.
-2. Assign values to intersection numbers first. Intersections are the most
-   constrained, so fixing them first prunes the search hardest.
-3. Solve the remaining dependent numbers outward by backtracking.
-4. Enforce these constraints on every assignment:
+**Filling is construction, not search.** This is the single most important thing in
+this section, and it was learned the hard way. The first implementation delegated to
+the solver, reasoning that a second search would duplicate tested code. Easy filled
+in 1 ms, Medium never finished, and Hard exhausted the test worker. The solver prunes
+with a forward check that can only reject a *fully assigned* equation, so from an
+empty grid every equation reads `incomplete`, nothing prunes, and 19 empty digit
+cells at Medium is 10^19 states.
+
+Constructing instead — pick terms, derive the remaining one, check it fits — took the
+fill to 1 ms. The solver stays exactly right for the job it was written for:
+uniqueness checking on a mostly-filled grid.
+
+1. Order equations breadth-first, so each shares cells with one already filled and
+   inherits its fixed digits.
+2. For each equation, choose an operator from the difficulty's allowed set using the
+   seeded PRNG.
+3. **Derive the widest term; draw the other two.** Deriving the result looks natural
+   and fails badly when the result is narrower than the operands: at Hard,
+   `ddd op ddd = d` lands on a valid one-digit result about 1% of the time, and every
+   equation must succeed at once, so the fill never completed. The widest term has
+   the most room to absorb the others.
+4. Draw each term digit by digit, honouring digits a crossing equation already fixed,
+   so a heavily constrained number costs the same as a free one.
+5. Enforce on every assignment:
    - Division `A / B` must satisfy `A mod B == 0`.
    - Every number must fit its assigned cell width exactly, with no leading zero.
-   - Negative values are permitted only when the difficulty's `allowNegative` flag
-     is set.
+   - Every operand and result must be in the difficulty's value range.
+6. Give each equation a bounded number of draws. Exhausting them fails the attempt,
+   which the outer loop in section 5.6 already handles by trying another seed.
 
-The output is a fully solved, fully valid grid.
+The output is a fully solved, fully valid grid, confirmed as such before it is
+returned.
 
 ### 5.3 Phase 3 — uniqueness verification
 
@@ -596,39 +628,51 @@ reach uniqueness.
 ### 5.4 Phase 4 — cell masking
 
 1. Compute target mask counts from the difficulty table.
-2. Mask cells one at a time, in seeded random order, up to the targets. **Weight the
+2. **Mask operators before digits.** Uniqueness is a budget and whichever kind goes
+   first spends it. Measured at M2: with digits first, Hard reached 14% of its
+   operator target while Medium reached 40%; with operators first, Hard reached
+   100% and generation got faster, because a denser grid settles a uniqueness check
+   sooner. Operators are the scarce resource — a handful per grid against dozens of
+   digits, each carrying far more difficulty.
+3. Mask cells one at a time, in seeded random order within each kind. **Weight the
    order towards intersection cells.** A cell belonging to two equations is far more
    likely to survive masking than one belonging to one, so an unweighted order spends
    the uniqueness budget on the least maskable cells first. This is measured, not
    assumed: see `.learnings/masking-is-limited-by-weakly-constrained-cells.md`.
-3. After each mask, re-run the uniqueness check. If uniqueness is lost, restore that
-   cell and continue with the next candidate.
-4. **Treat an operator mask exactly like a digit mask.** It is not cheaper. Usually
+4. After each mask, re-run the uniqueness check. If uniqueness is lost, restore that
+   cell and continue with the next candidate. The check runs under a **node budget**:
+   uniqueness checking is exponential in the blank count (1 ms at 5 blanks, 48 ms at
+   15, over 2000 ms at 19), so a check that cannot be settled cheaply answers "not
+   provably unique" and the mask is refused. Conservative by design — a shipped
+   puzzle is never ambiguous, and the cost is density rather than correctness.
+5. **Treat an operator mask exactly like a digit mask.** It is not cheaper. Usually
    the arithmetic and the cell widths force the operator, but not always: `2 ? 32 =
    ?4` admits both `2 + 32 = 34` and `2 * 32 = 64`, because two operators can agree
    on the result's digit count and its final digit. An operator mask therefore needs
    the same uniqueness check, and when the check fails the fix is to restore that
    operator, not a digit.
-5. Stop when the targets are met or the candidate list is exhausted.
-6. Report achieved mask density alongside the puzzle, so section 13.4 can assert on
+6. Stop when the targets are met or the candidate list is exhausted.
+7. Report achieved mask density alongside the puzzle, so section 13.4 can assert on
    it and a collapsing ladder fails a test instead of shipping.
 
 Masking a `digit` cell that holds the leading digit of a multi-cell number is legal.
 The no-leading-zero rule in section 2.2 then becomes a solver constraint on that
 cell, pruning its domain to 1 to 9.
 
-Masking percentages are targets, not guarantees. A puzzle reaching 70% digit masking
-at Hard instead of 75% is acceptable. A puzzle with two solutions is not. Uniqueness
-always wins. What is *not* acceptable is silent collapse: if achieved density falls
-more than 10 percentage points below target, the difficulty is no longer the
-difficulty it claims to be, and section 13.4 fails.
+Masking percentages are targets, not guarantees. A puzzle a few points under target
+is acceptable. A puzzle with two solutions is not. Uniqueness always wins.
 
-M0.5 supplied an early warning about that tolerance. A Medium board built by hand
-reached only 42% digit masking against its 60% target — an 18-point shortfall,
-constructed deliberately rather than found by search. If the generator misses
-similarly, the response is to fix the masking order or the mesh's intersection
-density, per step 2. **Do not widen the tolerance in section 13.4 to make the
-assertion pass**, which would defeat the assertion's purpose.
+**Assert density on the distribution, not on individual puzzles.** M2 measured about
+a quarter of legitimate puzzles sitting more than 10 points under target while the
+median sat within 3, so a per-puzzle assertion fails constantly and indicates
+nothing. What matters is systemic collapse — a difficulty whose whole distribution
+has slipped — because that is what "Hard quietly became Medium" actually looks like.
+Section 13.4 asserts the median.
+
+**Do not widen the tolerance to make the assertion pass.** Fix the masking order, the
+mesh, or the target. M0.5 warned that Medium's 60% target was unreachable by hand at
+42%, and M2 confirmed 53% by machine; the response was to set the target to 50%,
+which is what uniqueness allows, not to loosen the check.
 
 ### 5.5 Determinism
 
@@ -686,13 +730,16 @@ The design that follows:
    not as a crash.
 3. **The UI shows a generating state after 150 ms**, with progress and a cancel
    control. A player must never face a frozen screen.
-4. **Measure before tuning.** M2 runs the slow suite over 100 seeds per difficulty
-   and records median and worst attempts, median and worst milliseconds, and achieved
-   mask density per difficulty into `.learnings/generation-measurements.md`. Set the
-   cap from that table, not from a guess.
-5. If a difficulty's median exceeds 1000 ms after measurement, widen its acceptance
-   band before optimising code. A narrow band is the usual cause, per the sibling's
-   finding.
+4. **Measured at M2.** Easy generates in 0 ms median and 3 ms worst; Medium in 24 ms
+   median and 290 ms worst; Hard in 830 ms median and 1951 ms worst, needing a median
+   of 3 attempts and 10 at worst. Zero failures in 180 generations. The 5000-attempt
+   cap is therefore far above the operating range, which is the right side to err on.
+   Figures and the four decisions that dominated them are in
+   `.learnings/generation-measurements.md`.
+5. **A uniqueness check carries a node budget**, because checking is exponential in
+   the blank count. Exceeding it answers "not provably unique" rather than guessing,
+   so the generator refuses a mask it cannot cheaply prove safe. Correctness is never
+   the thing traded away; achieved density is.
 
 One optimisation is held in reserve and must not be built before measurement shows
 it is needed: cache verified skeletal meshes, including operand widths, and run only
@@ -782,9 +829,16 @@ Model each masked cell as a variable:
   domain.
 - A masked `sign` cell has the single value `-` as its domain.
 
-Each equation is a constraint over the cells in its run. Order variables
-most-constrained-first. Propagate after each assignment: when an equation has a
-single unassigned cell, solve it directly rather than searching.
+Each equation is a constraint over the cells in its run.
+
+**Order variables equation by equation, not most-constrained-first.** The textbook
+heuristic is the wrong one here: it interleaves cells from different equations, so no
+equation completes early, the forward check never fires, and a 60%-masked Medium board
+took 19 seconds to check for uniqueness. Grouping by equation, breadth-first, took the
+same check to 261 ms — same algorithm, same pruning rule, different order.
+
+Propagate after each assignment: when an equation has a single unassigned cell, solve
+it directly rather than searching.
 
 Digit-level variables mean an equation constrains its cells jointly rather than one
 variable per operand. Propagate at the number level where possible: if two of three
@@ -1655,9 +1709,11 @@ For a small fixed seed set per difficulty, assert:
 `generate.slow.test.ts`, run by `vitest.slow.config.ts` in `slow.yml`. 100 seeds per
 difficulty. Assert every property in section 13.3, and additionally:
 
-- **Achieved mask density is within 10 percentage points of target**, for both digits
-  and operators, at every difficulty. This is the assertion that catches Hard
-  silently collapsing into Medium because uniqueness forced too many cells back.
+- **The median achieved mask density is within 10 percentage points of target**, for
+  both digits and operators, at every difficulty. Asserted on the median rather than
+  per puzzle: individual density varies enough that a per-puzzle check fails on about
+  a quarter of legitimate puzzles. This is the assertion that catches Hard silently
+  collapsing into Medium because uniqueness forced too many cells back.
 - Generation succeeds within the attempt cap for at least 99% of seeds.
 
 Record median and worst attempts, median and worst milliseconds, and achieved mask
@@ -1719,10 +1775,12 @@ Each milestone ends with tests passing in CI.
   `evaluate.ts`, `solver.ts`, `test-fixtures.ts`. The section 2.8 fixture parses and
   evaluates. All section 13.1 tests pass, including the length-one run case. Record
   the accepted derived ranges from section 2.6 in `.learnings/`.
-- **M2 — Generation.** `mesh.ts` including operand widths, `fill.ts`, `mask.ts`,
-  `generate.ts`, `generate.worker.ts`, `game/generate-client.ts`, `starter.ts`. Fast
-  and slow suites pass for Easy. Run the slow suite, set the attempt cap and the
-  `slow.yml` wall-clock ceiling from the result, and write
+- **M2 — Generation. Done.** `rng.ts`, `numbers.ts`, `mesh.ts` including operand
+  widths and pattern feasibility, `fill.ts`, `mask.ts`, `generate.ts`,
+  `generate.worker.ts`, `game/generate-client.ts`, `starter.ts`. All three
+  difficulties generate with zero failures over 60 seeds. Attempt cap left at 5000,
+  far above the measured operating range of 1 to 10. Density targets reset from
+  measurement. Measurements and the four decisions that dominated cost are in
   `.learnings/generation-measurements.md`.
 - **M3 — Playable web.** Board rendering, the grouping cue, focus, the numeric pad,
   per-equation feedback with a non-colour channel, completion detection, the
@@ -1876,14 +1934,15 @@ and recorded in the section named below.
 Each has a stated default and a milestone at which a measurement replaces it. Do not
 decide these early by guessing.
 
-1. **The attempt cap.** Default 5000, from the sibling's corrected value. M2 measures
-   100 seeds per difficulty and sets the real figure. Section 5.6.
+1. **The attempt cap.** ~~Deferred.~~ Measured at M2 and left at 5000: the observed
+   worst case is 10 attempts, so the cap is far above the operating range, which is
+   the right side to err on. Section 5.6.
 2. **The `slow.yml` wall-clock ceiling.** Set at M2 from the measured figure plus
    headroom. Section 10.4.
 3. **The bundle ceilings.** Defaults in section 8.4 are budgets, not measurements. M3
    tightens the JS and CSS figures; M6 sets the installed-app figure from the AAB.
-4. **Hard's operator masking percentage.** 100% provisionally. M0.5 tests it by hand
-   and M4 settles it. Section 2.7.
+4. **Hard's operator masking percentage.** ~~Deferred.~~ Settled at M2: the full 100%
+   is achievable, once operators are masked before digits. Section 2.7.
 5. **Whether mesh caching is needed.** Held in reserve. Build it only if M2 shows a
    difficulty cannot meet its attempt cap. Section 5.6.
 
