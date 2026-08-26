@@ -8,7 +8,13 @@ mechanic is judged before M2 builds a generator for it.
 Solve board 1 and board 2, then read the findings section, then decide.
 
 `#` is a block. `?` is a cell you fill. Equations read left to right and top to
-bottom, **ignoring operator precedence**.
+bottom, with **normal BODMAS arithmetic**.
+
+> These boards were authored while the plan still specified left-to-right evaluation
+> with precedence ignored. That rule was reversed immediately afterwards, for the
+> reason now in plan section 2.5. Every equation on every board below has a single
+> operator on each side of the `=`, so precedence cannot arise and all three boards
+> and all three findings are unaffected. Finding 3 is what prompted the reversal.
 
 Solutions are at the bottom. The findings section between the boards and the
 solutions contains no spoilers for boards 1 and 2.
@@ -159,19 +165,26 @@ fails, the fix is to give back that operator rather than a digit. At Hard's 100%
 operator masking, expect the loop to hand a meaningful fraction of them back, which
 is the mechanism by which Hard could quietly become Medium.
 
-### 3. The left-to-right rule never came up
+### 3. The evaluation rule never came up — which changed the rule
 
 Not once in three boards. Every equation I could build within the cell budget has a
-single operator on the left of the `=`, so precedence has nothing to disambiguate.
-`5 + 3 * 2` needs seven cells for the left side alone plus two more for `= 16`, so
+single operator on each side of the `=`, so precedence has nothing to disambiguate.
+`5 + 3 * 2` needs five cells for the left side alone plus four more for `= 11`, so
 nine — a full Hard row, and only in the one pattern that fits.
 
-Two consequences. First, the rule matters far less often than plan section 2.5 and
-the onboarding in section 8.7 imply, which weakens the case for leading the
-onboarding with it. Second, and more useful: the rule is a **Hard-only mechanic** in
-practice. That is arguably good design — it gives Hard something qualitatively its
-own rather than merely more masking — but it should be a deliberate choice rather
-than an accident of the cell budget.
+So whichever evaluation rule the game uses, it is a **Hard-only concern** in
+practice. Easy and Medium cannot express an equation where it matters.
+
+That finding is what prompted reversing the rule. Under the old left-to-right rule,
+the plan was carrying a mechanic that almost never fired, that contradicted school
+arithmetic, and that therefore had to be taught in the onboarding before a player
+could meet it — a teaching cost paid by every player for a rule most would never
+encounter. Under BODMAS the rarity costs nothing, because the behaviour is what a
+player already expects. The onboarding slot freed up went to multi-cell numbers,
+which unlike precedence apply from the first Medium board.
+
+The wider lesson: check how often a distinctive rule can actually fire before paying
+to teach it.
 
 ---
 

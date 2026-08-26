@@ -42,14 +42,21 @@ changed after the first Play upload; the display name can.
 
 ### 1.3 Sibling project
 
-`C:\code\sudoku` is an offline-first Sudoku PWA with the same shape: seeded runtime
-generation, a Cordova Android shell, GitHub Pages deployment, and Play publishing.
-Its pipeline is working and its constraints are measured.
+MathsCross was scaffolded from a sibling project: an offline-first Sudoku PWA with
+the same shape — seeded runtime generation, a Cordova Android shell, GitHub Pages
+deployment, and Play publishing. Its pipeline was working and its costs were
+measured.
 
-MathsCross must follow its conventions rather than invent new ones: the same folder
+MathsCross follows its conventions rather than inventing new ones: the same folder
 layout, the same theme tokens, the same two-config Vite setup, and the same native
-shell settings. Section 12 lists the entries in `C:\code\sudoku\.learnings\` that
-apply here and must be read before the work they govern.
+shell settings.
+
+**Do not reference the sibling by filesystem path**, here or in code or in a
+learning. A path outside this repository is true on one machine only; another
+developer, a CI runner, or this machine after a reorganisation would find nothing
+there. Everything MathsCross depends on has been copied into this repository:
+section 12 lists the copied learnings, and section 9.6 restates the store-asset
+procedure rather than pointing at it.
 
 Deviating from a sibling convention is allowed only with a stated reason. Eight
 deviations are already known and are recorded in section 11.
@@ -212,31 +219,50 @@ the columns pass through. Under the wrong reading, no Easy grid exists at all.
 
 ### 2.5 Evaluation rule
 
-Evaluation is strictly left-to-right for horizontal equations and strictly
-top-to-bottom for vertical equations. Operator precedence is ignored.
+**Standard operator precedence applies: BODMAS.** Division and multiplication bind
+before addition and subtraction. Within one precedence tier, evaluation runs left to
+right for a horizontal equation and top to bottom for a vertical one.
 
 ```
-5 + 3 * 2 = 16      evaluated as (5 + 3) * 2
+5 + 3 * 2 = 11      the multiplication binds first
+10 - 3 + 2 = 9      same tier, so left to right: (10 - 3) + 2
+8 / 4 / 2 = 1       same tier, so left to right: (8 / 4) / 2
 ```
 
-Ignoring precedence is deliberate. It keeps mental arithmetic tractable on a phone
-screen. Do not implement PEMDAS. Do not add parentheses.
+There are no brackets and no powers on a grid, so of BODMAS only the DM-then-AS part
+is operative. The left-to-right rule within a tier is not a detail to skip: without
+it `10 - 3 + 2` and `8 / 4 / 2` are ambiguous.
 
-An equation is satisfied when each side of the `=` evaluates to the same value, with
-each side evaluated in reading order.
+An equation is satisfied when both sides of the `=` evaluate to the same value.
 
-This is the rule most likely to defeat a new player, because school teaches the
-opposite. Section 8.7 makes teaching it a release-1 requirement.
+**Exact division is checked per division, in precedence order.** `6 / 4 * 2` is
+invalid, because `6 / 4` is evaluated first and is not exact, even though `6 * 2 / 4`
+would give 3. Do not reorder a division to make it exact.
 
-**M0.5 found that the rule almost never applies.** Precedence can only disambiguate
-an equation with two operators on the left of the `=`, and that needs seven cells for
-the left side plus two for the result. Nine cells is a full Hard row, in the single
-pattern that fits. Easy and Medium cannot express such an equation at all.
+An earlier draft of this plan specified strict left-to-right evaluation with
+precedence ignored, on the grounds that it keeps mental arithmetic simple on a phone.
+That was the wrong trade, and the reason is not merely that players would find it
+surprising.
 
-So left-to-right evaluation is, in practice, a **Hard-only mechanic**. That is
-arguably good design — it gives Hard something qualitatively its own rather than
-merely more masking — but it should be a deliberate choice. It also weakens the case
-for leading the onboarding with it; section 8.7 records that as open.
+A maths game that contradicts school arithmetic does one of two harmful things to a
+child playing it. Either it marks correct arithmetic as wrong — the player applies
+what school taught, gets told they are mistaken, and has no way to tell that the game
+is the thing that is unusual. Or it succeeds in teaching its own rule, and the player
+then has to unlearn it. Both outcomes are worse than any phone-screen convenience,
+and neither has an upside. A puzzle game may invent its own rules freely; a game
+whose subject is arithmetic may not invent arithmetic.
+
+This holds for adults too — everyone was taught BODMAS — but it is the reason the
+decision is not negotiable rather than merely preferable. Matching school arithmetic
+also means the rule needs no teaching at all, which resolves the onboarding question
+in section 8.7.
+
+**M0.5 found that precedence almost never arises.** It can only matter in an equation
+with two operators on one side of the `=`, which needs seven cells for that side plus
+two for the result. Nine cells is a full Hard row, in the single pattern that fits, so
+Easy and Medium cannot express such an equation at all. Precedence is therefore a
+Hard-only concern in practice — but now it is the *expected* behaviour rather than a
+surprise, so its rarity costs nothing.
 
 ### 2.6 Value range is derived, not declared
 
@@ -380,7 +406,7 @@ in the same places.
       rng.ts                  # seeded deterministic PRNG
       grid.ts
       parse.ts                # grid -> equations, numbers, sign classification
-      evaluate.ts             # left-to-right evaluation, validation states
+      evaluate.ts             # BODMAS evaluation, validation states
       mesh.ts                 # phase 1: skeletal mesh, operand cell widths
       fill.ts                 # phase 2: operator and value fill
       solver.ts               # phase 3: DFS with forward checking, uniqueness
@@ -464,7 +490,7 @@ scripts through `cmd.exe` on Windows, where `VAR=1 vitest` is a parse error.
 
 ### 3.2 README
 
-Short and practical. What MathsCross is, the left-to-right evaluation rule stated
+Short and practical. What MathsCross is, the BODMAS evaluation rule stated
 plainly, how to run the dev server, how to build both targets, how to run the fast
 and the slow suites, and a pointer to `plan.md` as the design authority. Nothing
 else: the plan is not duplicated into the README.
@@ -1052,30 +1078,24 @@ is no penalty and no time limit. Pausing rules are in section 7.3.
 
 ### 8.7 Onboarding
 
-Every player arrives expecting operator precedence, because that is what school
-taught. A player who assumes PEMDAS will enter correct-looking answers, watch them be
-rejected, and reasonably conclude the game is broken. Nothing else in the plan
-addresses this, and with the Kids tier deferred, Easy carries the teaching job alone.
+Arithmetic needs no explaining, now that section 2.5 uses BODMAS: the game agrees
+with what every player was taught. One thing does need explaining, and it is the
+thing genuinely unique to this game.
 
-- Show a first-run explainer once: one dismissable card stating the left-to-right
-  rule with the `5 + 3 * 2 = 16` example from section 2.5.
+**Multi-cell numbers.** A player who reads `1 5` as two operands rather than fifteen
+will enter correct-looking answers, watch them be rejected, and reasonably conclude
+the game is broken. It applies from the first Medium board, and the grouping cue in
+section 8.5 helps but does not by itself say what the grouping means.
+
+- Show a first-run explainer once: one dismissable card, whose subject is that
+  adjacent digit cells form one number, with a worked example.
 - Keep a permanent link to the same card in the menu, so it can be re-read.
 - Record dismissal in settings, not in the board slot.
 
+Do not explain operator precedence. Explaining that the game follows the normal rules
+implies that it might not have, and invites a player to look for a catch.
+
 Build it at M3, not at M7.
-
-**Open, after M0.5: should the explainer still lead with the left-to-right rule?**
-Section 2.5 records the finding that the rule cannot arise below Hard, because a
-two-operator left side needs nine cells. A player who never reaches Hard never meets
-it, so leading with it teaches a rule that will not be exercised and delays the rule
-that will — that numbers span cells, which applies from the first Medium board and is
-the thing most likely to be misread. Two candidate orderings:
-
-1. Lead with multi-cell numbers, and introduce left-to-right on first entry to Hard.
-2. Keep one card covering both, with multi-cell numbers first.
-
-Decide before building the card. Until then this section's requirement stands: the
-left-to-right rule must be taught *somewhere* before a player can meet it.
 
 ### 8.8 Accessibility
 
@@ -1258,7 +1278,8 @@ Author one `public/icon.svg` and generate every raster size from it with
 Everything Play needs that is not the binary. All of it is uploaded to Play Console
 by hand, none of it ships inside the app, and it all lives in `store/`. The sibling
 has solved this completely, including one non-obvious trap, so copy the approach
-rather than rediscovering it. Read `C:\code\sudoku\store\README.md` before starting.
+rather than rediscovering it. Everything needed is restated below; there is nothing
+to go and read elsewhere.
 
 Treat the sizes and requirements below as the sibling's verified values, not as
 current policy. Play changes its requirements, so re-check each against Play Console
@@ -1342,7 +1363,7 @@ from the sibling's, because pencil marks are deferred and the evaluation rule ne
 explaining:
 
 1. A part-solved Medium board, showing the grouping cue on a multi-cell number.
-2. The first-run explainer from section 8.7. The left-to-right rule is the game's one
+2. The first-run explainer from section 8.7. Multi-cell numbers are the game's one
    surprising rule, and a player who learns it from the listing arrives already
    understanding the mechanic.
 3. The difficulty menu.
@@ -1539,23 +1560,41 @@ Eight, each with a reason. Any further deviation must be added here with its rea
    sibling runs its slow suite in `ci.yml`. A MathsCross attempt costs more than a
    Sudoku attempt, so the same arrangement would tax every push. Section 10.4.
 
-## 12. Sibling learnings that apply
+## 12. Learnings
 
-Read the entry before the work it governs. Copy each into this repository's
-`.learnings/` once verified here, rather than relying on a cross-repository path.
+`.learnings/` holds non-obvious facts, with `index.md` as the entry point. Read the
+entries relevant to an area before working in it, and add one when something is
+discovered that the code does not already record.
+
+Ten entries were copied from the sibling project at M0 rather than referenced by
+path, so this repository is self-contained. Each names the originating project for
+provenance and no location. Where a fact was measured rather than reasoned, the copy
+says explicitly that the numbers belong to the other project and do not transfer.
+Where a copied claim has not yet been verified against MathsCross, the copy says so.
 
 | Entry | Read before |
 |---|---|
+| `sibling-project-inheritance.md` | adopting or rejecting a sibling convention |
+| `masking-is-limited-by-weakly-constrained-cells.md` | changing masking order, the intersection ranges, or the mask density assertion |
+| `generation-cost-follows-rejection-rate.md` | changing the attempt cap, or diagnosing a slow difficulty |
+| `solution-concealment.md` | persisting anything derived from a solution |
 | `native-shell-origin.md` | touching `native/config.xml` or the native base path |
-| `generation-measurements.md` | changing generation or the attempt cap |
-| `github-pages-tag-deploys.md` | changing the deploy trigger, or debugging a rejected deployment |
-| `play-app-signing.md` | touching signing secrets or testing a release build |
-| `solution-concealment.md` | persisting anything derived from the solution |
 | `ios-storage-eviction.md` | touching persistence or stats |
-| `service-worker-unverifiable-in-pane.md` | verifying offline behaviour |
-| `windows-vite-child-process-locks.md` | starting or stopping a dev server, or when a build fails with `EPERM` |
+| `github-pages-tag-deploys.md` | pushing the first `v*` tag |
+| `play-app-signing.md` | touching signing secrets or testing a release build |
+| `windows-git-bash-mangles-app-base.md` | verifying the Pages base path locally |
+| `windows-npm-script-env-vars.md` | adding a script that needs per-run configuration |
+| `windows-vite-child-process-locks.md` | starting or stopping a dev server, or a build failing with `EPERM` |
 | `vite-root-src-module-paths.md` | driving the app from the browser console |
-| `windows-npm-script-env-vars.md` | adding an npm script that needs per-run configuration |
+| `service-worker-unverifiable-in-pane.md` | claiming offline behaviour is verified |
+
+Two rules for writing one:
+
+- **Never reference a path outside this repository.** Copy the content or restate
+  the fact. A learning that cannot be read is not a learning.
+- **Label an unverified claim as unverified**, and label a measurement with whose
+  measurement it is. Restating another project's numbers as local fact is worse than
+  having no entry.
 
 ## 13. Testing
 
@@ -1569,9 +1608,14 @@ Tests must pass before any task is reported as done.
   operands. This pins the number-bounds rule.
 - Assert `[9][-][1][2][=][-][3]` parses as `9 - 12 = -3`, with the first `-` binary
   and the second a sign. This pins the unary minus rule.
-- Assert `5 + 3 * 2 = 16` is satisfied under left-to-right evaluation, and that the
-  PEMDAS reading `5 + 3 * 2 = 11` is not. This guards the rule most likely to be
-  broken by a well-meaning refactor.
+- Assert `5 + 3 * 2 = 11` is satisfied under BODMAS, and that the left-to-right
+  reading `5 + 3 * 2 = 16` is not.
+- Assert `10 - 3 + 2 = 9` and `8 / 4 / 2 = 1`, which pin left-to-right association
+  *within* a precedence tier. Without these two, an implementation that folds right
+  to left inside a tier passes every other test here.
+- Assert `6 / 4 * 2` is unsatisfiable, because exactness is checked per division in
+  precedence order, and `6 / 4` is not exact. A reordering implementation would make
+  it 3 and pass.
 - Assert a leading zero such as `[0][5]` is rejected.
 - Assert a run with no `equals` cell is reported illegal.
 - Assert an equation with no `operator` cell is reported illegal.
@@ -1708,7 +1752,7 @@ Each milestone ends with tests passing in CI.
 
 The plan commits M1 and M2 to a parser, an evaluator, a solver, a mesh generator, a
 fill, a mask and a worker before any human plays anything. The risk is concrete:
-cross-sums with left-to-right evaluation may be tedious rather than satisfying, and
+cross-sums may be tedious rather than satisfying, and
 discovering that after the most expensive work in the plan is finished would be the
 worst possible order.
 
@@ -1760,11 +1804,12 @@ frightening-sounding failure into a costed one.
 | Hard's 100% operator masking is unsolvable or unfun | The top of the difficulty ladder is unusable | Demoted to a hypothesis in section 2.7, tested by hand at M0.5, expected to settle at 60 to 70% |
 | Uniqueness forces so many cells back that Hard becomes Medium | The ladder silently collapses and nobody notices | Achieved mask density reported by the generator and asserted within 10 points in section 13.4 |
 | Generation cost is dominated by a narrow acceptance band, as in the sibling | Long waits or exhausted caps | Worker with progress and cancel, attempt cap, measured at M2, band widened before code is optimised. Section 5.6 |
-| A new player assumes PEMDAS and concludes the game is broken | Uninstall on first play | The first-run explainer in section 8.7, built at M3 |
+| A new player reads `1 5` as two operands rather than fifteen, and concludes correct answers are being rejected | Uninstall on first play | The grouping cue in section 8.5 and the first-run explainer in section 8.7, both built at M3 |
 | The first board on a fresh install makes the player wait | Uninstall before the first puzzle | Bundled starter puzzle and background pre-generation. Section 5.8 |
 | Operand cell widths disagree at an intersection | Generator emits unsolvable or misparsed puzzles | Width consistency asserted at the end of phase 1 and property-tested in section 13.3 |
 | The mesh legality rules are misread again | No valid 5 x 5 grid exists, or the reference board is rejected | Both rules restated in sections 2.4 and 5.1 with the failure spelled out, plus the explicit test in section 13.1 |
-| Left-to-right evaluation is refactored into PEMDAS | Every existing puzzle becomes unsolvable | The explicit non-PEMDAS test in section 13.1 and a comment in `evaluate.ts` stating why precedence is absent |
+| Left-to-right association *within* a precedence tier is implemented right-to-left, or a division is reordered to make it exact | Puzzles silently accept wrong answers or reject right ones, and only in equations with two same-tier operators — which only Hard can produce | The three association and exactness tests in section 13.1, which no other test in the suite would catch |
+| A maths game contradicts school arithmetic | A child is told correct arithmetic is wrong, or learns a rule they must later unlearn | BODMAS, per section 2.5. Not negotiable, and the reason is recorded there so it is not traded away for convenience later |
 | Multi-cell numbers are not visually grouped | Players misread `1 5` as two operands and think correct answers are rejected | The grouping cue in section 8.5, tested at M3 against the fixture board |
 | Equation state is conveyed by colour alone | Unusable for colour-blind players, and it is a three-state distinction | A second non-colour channel, required by section 8.8 and asserted in section 13.7 |
 | Accessibility is deferred to M7 | Retrofitting a grid widget costs several times building it right | Pulled forward into M3. Section 8.8 |
@@ -1805,7 +1850,7 @@ and recorded in the section named below.
 | Undo | In scope. 200 moves, single-cell, persisted | 8.6 |
 | Mistake counting | Out of scope. Not definable for this mechanic | 1.5 |
 | Pencil marks | Out of scope; `--colour-note` deleted | 1.5, 8.1 |
-| Onboarding | First-run explainer for the left-to-right rule | 8.7 |
+| Onboarding | First-run explainer for multi-cell numbers | 8.7 |
 | Animation | One reduced-motion-gated completion transition, nothing else | 8.3 |
 | Accessibility timing | Pulled forward from M7 into M3 | 8.8 |
 | First launch | Bundled starter puzzle plus background pre-generation | 5.8 |

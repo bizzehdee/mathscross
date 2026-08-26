@@ -8,16 +8,27 @@ No accounts, no adverts, no network. The puzzles are generated on the device.
 Ships as a web app, installable as a PWA, and as an Android app wrapped with
 Apache Cordova. Both targets build from this one codebase.
 
-## The one surprising rule
+## The rules
 
-Equations evaluate **strictly left to right**, top to bottom for vertical runs.
-Operator precedence is ignored:
+**Arithmetic is normal arithmetic.** BODMAS applies: division and multiplication
+bind before addition and subtraction, and within a tier evaluation runs left to
+right.
 
 ```
-5 + 3 * 2 = 16        because (5 + 3) * 2 = 16, not 5 + (3 * 2) = 11
+5 + 3 * 2 = 11        the multiplication binds first
+10 - 3 + 2 = 9        same tier, so left to right
+8 / 4 / 2 = 1         same tier, so left to right
 ```
 
-This is deliberate. It keeps the mental arithmetic tractable on a phone screen.
+Division must be exact, and exactness is checked per division in precedence
+order, so `6 / 4 * 2` is invalid even though `6 * 2 / 4` would be 3.
+
+A game about arithmetic does not get to invent arithmetic. Anything else would
+either mark a correct answer wrong, or teach a habit that has to be unlearned.
+
+**Numbers span cells.** Adjacent digit cells form one number, so `1` next to `5`
+reads as fifteen, not as two operands. This is the one thing about the game worth
+explaining, and the board draws grouped cells to show it.
 
 ## Development
 
