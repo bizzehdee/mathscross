@@ -215,3 +215,121 @@ function solution(): [number, number][] {
   }
   return answers
 }
+
+describe('the difficulty menu', () => {
+  it('offers all three difficulties, describing what each asks', () => {
+    const root = mount()
+    const buttons = [...root.querySelectorAll<HTMLElement>('.menu .button')]
+
+    expect(buttons.map((b) => b.textContent)).toEqual(['Easy', 'Medium', 'Hard'])
+    // The label says what the difficulty actually involves, so a player choosing
+    // Hard knows division and hidden operators are coming.
+    expect(buttons[2]?.getAttribute('aria-label')).toContain('every operator hidden')
+  })
+
+  it('marks the difficulty in play as pressed', () => {
+    const root = mount()
+    const easy = root.querySelector<HTMLElement>('.menu .button')
+
+    expect(easy?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('asks before discarding a part-solved puzzle', () => {
+    // One free-play slot, so a new puzzle replaces the current one. Losing a
+    // half-finished board to a mis-tap would be the most annoying possible bug.
+    const asked: string[] = []
+    const root = document.createElement('div')
+    document.body.replaceChildren(root)
+    mountApp(root, {
+      version: 'test',
+      client: { request: () => never() },
+      confirmDiscard: (message) => {
+        asked.push(message)
+        return false
+      },
+    })
+
+    // Enter something, so there is progress worth protecting.
+    const blank = [...root.querySelectorAll<HTMLElement>('[data-editable="true"]')][0]
+    blank?.click()
+    root.querySelector<HTMLElement>('.keypad__pad--digits [aria-label="Digit 4"]')?.click()
+
+    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain('will be lost')
+  })
+
+  it('does not ask when nothing has been entered', () => {
+    // Confirming something the player has not invested in is friction for its own
+    // sake.
+    const asked: string[] = []
+    const root = document.createElement('div')
+    document.body.replaceChildren(root)
+    mountApp(root, {
+      version: 'test',
+      client: { request: () => never() },
+      confirmDiscard: (message) => {
+        asked.push(message)
+        return false
+      },
+    })
+
+    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+
+    expect(asked).toHaveLength(0)
+  })
+})
+
+describe('the generating state', () => {
+  it('offers a cancel control while a puzzle is being made', () => {
+    // Plan section 5.6: a player must never face a frozen screen, and must always
+    // be able to give up waiting.
+    const root = mount()
+    let cancelled = false
+    document.body.replaceChildren(root)
+
+    const withCancel = document.createElement('div')
+    document.body.replaceChildren(withCancel)
+    mountApp(withCancel, {
+      version: 'test',
+      confirmDiscard: () => true,
+      client: {
+        request: () => ({
+          puzzle: new Promise<never>(() => {}),
+          cancel: () => {
+            cancelled = true
+          },
+        }),
+      },
+    })
+
+    withCancel.querySelectorAll<HTMLElement>('.menu .button')[2]?.click()
+    withCancel.querySelector<HTMLElement>('.generating .button')?.click()
+
+    expect(cancelled).toBe(true)
+  })
+
+  it('reports a failed generation without breaking the current puzzle', () => {
+    const root = document.createElement('div')
+    document.body.replaceChildren(root)
+    mountApp(root, {
+      version: 'test',
+      confirmDiscard: () => true,
+      client: {
+        request: () => ({
+          puzzle: Promise.resolve({ ok: false as const, reason: 'exhausted' as const }),
+          cancel: () => {},
+        }),
+      },
+    })
+
+    root.querySelectorAll<HTMLElement>('.menu .button')[1]?.click()
+
+    return Promise.resolve().then(() => {
+      expect(root.querySelector('.status')?.textContent).toContain('Please try again')
+      // The board is still there and still playable.
+      expect(root.querySelectorAll('[data-editable="true"]').length).toBeGreaterThan(0)
+    })
+  })
+})

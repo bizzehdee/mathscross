@@ -1798,9 +1798,20 @@ Each milestone ends with tests passing in CI.
   and 1.7 KiB CSS gzipped, ceilings tightened accordingly, and the size gate added
   to `ci.yml`. Three defects found only by running the app in a browser, recorded in
   `.learnings/dom-tests-do-not-see-css.md`.
-- **M4 — Difficulty breadth.** Medium and Hard generation. Negative values, division,
-  the operator pad, operator masking. Settle Hard's operator masking percentage from
-  the M0.5 result and the mask-density assertion.
+- **M4 — Difficulty breadth. Done.** `ui/menu`, and the generating state with
+  progress and a cancel control. All three difficulties are reachable and playable.
+  Verified on a real Hard board in a browser: 9 x 9, seven equations, all seven
+  operators masked, 16 of 39 digits masked, 34 cells carrying grouping cues, and the
+  entry pad swapping between digits and operators as focus moves.
+
+  Generation itself, negative values, division and operator masking all landed at
+  M2, and Hard's masking percentages were settled there by measurement rather than
+  deferred to here. What remained for M4 was exposing the difficulties in the UI.
+
+  Implemented as a three-button menu rather than the "library screen" this plan
+  first described. Three difficulties do not need a screen, and a screen would have
+  added navigation with nothing to navigate. Revisit if release 2 adds saved puzzles
+  or a puzzle list, which would give a library something to list.
 - **M5 — Persistence, daily, PWA.** The two slots, resume with undo intact, stats per
   section 7.3, settings, the four themes, daily seeding and UTC rotation, streak
   semantics per section 7.4, the service worker with the prompt-to-update flow, the

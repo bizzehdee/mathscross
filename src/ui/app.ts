@@ -1,20 +1,21 @@
 /**
  * The playing screen. Plan sections 5.8, 8.5, 8.6, 8.7 and 8.8.
  *
- * Owns the game state and wires the board, the keypad, the controls, the
- * onboarding card and the generating state together. Everything it renders comes
- * from `GameState` and `boardStatus`; it computes no arithmetic of its own.
+ * Owns the session and wires the board, keypad, controls, menu, onboarding card
+ * and generating state together. Everything it renders comes from `GameState` and
+ * `boardStatus`; it computes no arithmetic of its own.
  */
-import { Difficulty } from '../engine/difficulty'
+import { type Difficulty } from '../engine/difficulty'
 import { starterGrid, STARTER_DIFFICULTY } from '../engine/starter'
-import { CellKind, EMPTY } from '../engine/types'
-import { drawSeed, GenerateClient } from '../game/generate-client'
+import { CellKind, type Grid } from '../engine/types'
+import { drawSeed, GenerateClient, type GenerateHandle } from '../game/generate-client'
 import {
   clear as clearCell,
   createGameState,
   enter,
   isEditable,
   redo,
+  remainingCells,
   undo,
   type GameState,
 } from '../game/state'
@@ -22,6 +23,7 @@ import { bindTimerToVisibility, createTimer } from '../game/timer'
 import { createBoardView, type BoardView } from './board/board'
 import { createControlsView, type ControlsView } from './controls/controls'
 import { createKeypadView, type KeypadView } from './keypad/keypad'
+import { createMenuView } from './menu/menu'
 import { createOnboardingView } from './onboarding/onboarding'
 
 /** How long generation may run before the player is told it is working. */
@@ -32,12 +34,31 @@ const CLOCK_TICK_MS = 1000
 
 export interface AppOptions {
   readonly version: string
-  /** Overridden by tests to avoid spawning a real worker. */
+  /** Replaced in tests, which have no Worker. */
   readonly client?: Pick<GenerateClient, 'request'>
+  /**
+   * Asks before discarding an in-progress puzzle.
+   *
+   * Injected so tests need not stub a global. There is one free-play slot, so a
+   * new puzzle replaces the current one, and losing a half-finished board to a
+   * mis-tap would be the most annoying bug this game could have.
+   */
+  readonly confirmDiscard?: (message: string) => boolean
+}
+
+interface Session {
+  readonly state: GameState
+  readonly board: BoardView
+  readonly keypad: KeypadView
+  readonly controls: ControlsView
+  readonly dispose: () => void
 }
 
 export function mountApp(mount: HTMLElement, options: AppOptions): void {
   mount.replaceChildren()
+
+  const confirmDiscard =
+    options.confirmDiscard ?? ((message: string) => window.confirm(message))
 
   const header = document.createElement('header')
   header.className = 'header'
@@ -49,14 +70,23 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
 
   const status = document.createElement('p')
   status.className = 'status'
-  // The live region section 8.8 requires. Equation state changes are announced
-  // here, so a screen reader user learns an equation became correct without
-  // having to walk the grid looking for it.
+  // The live region section 8.8 requires, so a screen reader user learns an
+  // equation became correct without walking the grid to find out.
   status.setAttribute('role', 'status')
   status.setAttribute('aria-live', 'polite')
 
   const layout = document.createElement('div')
   layout.className = 'layout'
+
+  const generating = document.createElement('div')
+  generating.className = 'generating'
+  generating.hidden = true
+  const generatingText = document.createElement('span')
+  const cancelButton = document.createElement('button')
+  cancelButton.type = 'button'
+  cancelButton.className = 'button'
+  cancelButton.textContent = 'Cancel'
+  generating.append(generatingText, cancelButton)
 
   const footer = document.createElement('p')
   footer.className = 'status status--version'
@@ -64,40 +94,34 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
 
   const onboarding = createOnboardingView({
     onDismiss: () => {
-      // Persisted in settings at M5. Until then the card shows once per load,
-      // which is the correct behaviour with nothing to remember it in.
-      dismissedOnboarding = true
+      // Persisted in settings at M5. Until then it shows once per load, which is
+      // the correct behaviour with nothing to remember it in.
+      dismissed = true
     },
   })
 
-  mount.append(header, onboarding.element, status, layout, footer)
+  const menu = createMenuView({ onChoose: (difficulty) => newPuzzle(difficulty) })
 
-  let dismissedOnboarding = false
-  let current: Session | null = null
-  // Declared before the first `start()` call below. `start` is hoisted but this is
-  // not: reading it from `announce` during the initial mount would otherwise throw.
+  mount.append(header, menu.element, onboarding.element, generating, status, layout, footer)
+
+  let dismissed = false
+  let session: Session | null = null
+  let pending: GenerateHandle | null = null
+  let noticeTimer: number | null = null
+  // Declared before the first `start()` call. `start` is hoisted; this is not, and
+  // `announce` reads it during the initial mount.
   let lastAnnouncement = ''
   const client = options.client ?? new GenerateClient()
 
-  // The first board is the bundled one, so a new player waits for nothing. Plan
-  // section 5.8.
+  // The first board is bundled, so a new player waits for nothing. Plan 5.8.
   start(starterGrid(), STARTER_DIFFICULTY, 'Starter puzzle')
-  if (!dismissedOnboarding) {
+  menu.setCurrent(STARTER_DIFFICULTY)
+  if (!dismissed) {
     onboarding.show()
   }
 
-  interface Session {
-    readonly state: GameState
-    readonly board: BoardView
-    readonly keypad: KeypadView
-    readonly controls: ControlsView
-    readonly stopClock: () => void
-    readonly detachVisibility: () => void
-  }
-
-  function start(puzzle: ReturnType<typeof starterGrid>, difficulty: Difficulty, label: string): void {
-    current?.stopClock()
-    current?.detachVisibility()
+  function start(puzzle: Grid, difficulty: Difficulty, label: string): void {
+    session?.dispose()
 
     const state = createGameState(puzzle, difficulty)
     const timer = createTimer()
@@ -105,9 +129,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     const detachVisibility = bindTimerToVisibility(timer)
 
     const board = createBoardView(state, {
-      onSelect: (cell) => {
-        keypad.showFor(state.board.kinds[cell], isSignCell(state, cell))
-      },
+      onSelect: (cell) => showPadFor(state, cell),
       onType: (cell, value) => apply(cell, value),
       onClear: (cell) => {
         if (clearCell(state, cell) === 'applied') {
@@ -136,6 +158,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
         const cell = undo(state)
         if (cell !== null) {
           board.focus(cell)
+          showPadFor(state, cell)
           refresh()
         }
       },
@@ -143,6 +166,7 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
         const cell = redo(state)
         if (cell !== null) {
           board.focus(cell)
+          showPadFor(state, cell)
           refresh()
         }
       },
@@ -153,20 +177,24 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     layout.replaceChildren(board.element, keypad.element, controls.element)
     difficultyLabel.textContent = label
 
-    current = {
+    session = {
       state,
       board,
       keypad,
       controls,
-      stopClock: () => window.clearInterval(tick),
-      detachVisibility,
+      dispose: () => {
+        window.clearInterval(tick)
+        detachVisibility()
+        timer.pause()
+      },
     }
 
     const focused = board.focused
-    keypad.showFor(
-      focused === null ? undefined : state.board.kinds[focused],
-      focused !== null && isSignCell(state, focused),
-    )
+    if (focused !== null) {
+      showPadFor(state, focused)
+    } else {
+      keypad.showFor(undefined, false)
+    }
     refresh()
 
     function apply(cell: number, value: number): void {
@@ -178,11 +206,100 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
       }
     }
 
+    function showPadFor(current: GameState, cell: number): void {
+      keypad.showFor(current.board.kinds[cell], isSignCell(current, cell))
+    }
+
     function refresh(): void {
       board.render()
       controls.render()
       announce(board)
     }
+  }
+
+  /**
+   * Starts a new puzzle, asking first if the current one is part-solved.
+   *
+   * An untouched board is discarded without a prompt: confirming something the
+   * player has not invested anything in is friction for its own sake.
+   */
+  function newPuzzle(difficulty: Difficulty): void {
+    if (pending !== null) {
+      return
+    }
+    if (session !== null && hasProgress(session.state)) {
+      const keep = confirmDiscard(
+        'Start a new puzzle? The one you are working on will be lost.',
+      )
+      if (!keep) {
+        return
+      }
+    }
+
+    const seed = drawSeed()
+    menu.setBusy(true)
+    lastAnnouncement = ''
+
+    // Only announce after a delay. Easy generates in single-digit milliseconds, so
+    // flashing "generating" for one frame would be noise rather than information.
+    noticeTimer = window.setTimeout(() => {
+      generatingText.textContent = 'Making a puzzle…'
+      generating.hidden = false
+    }, GENERATING_NOTICE_MS)
+
+    const handle = client.request(seed, difficulty, {
+      onProgress: (attempt) => {
+        generatingText.textContent = `Making a puzzle… (attempt ${attempt})`
+      },
+    })
+    pending = handle
+
+    void handle.puzzle.then((outcome) => {
+      finishGenerating()
+
+      if (!outcome.ok) {
+        status.textContent =
+          outcome.reason === 'cancelled'
+            ? 'Cancelled. Your puzzle is untouched.'
+            : 'Could not make a puzzle this time. Please try again.'
+        lastAnnouncement = status.textContent
+        return
+      }
+
+      start(outcome.puzzle.grid, difficulty, difficulty)
+      menu.setCurrent(difficulty)
+    })
+  }
+
+  cancelButton.addEventListener('click', () => {
+    pending?.cancel()
+  })
+
+  function finishGenerating(): void {
+    if (noticeTimer !== null) {
+      window.clearTimeout(noticeTimer)
+      noticeTimer = null
+    }
+    generating.hidden = true
+    menu.setBusy(false)
+    pending = null
+  }
+
+  /** Whether the player has entered anything worth protecting. */
+  function hasProgress(state: GameState): boolean {
+    const total = remainingCells(state).length
+    const blanks = countBlanks(state)
+    return total < blanks
+  }
+
+  function countBlanks(state: GameState): number {
+    let blanks = 0
+    for (let cell = 0; cell < state.puzzle.kinds.length; cell += 1) {
+      if (isEditable(state, cell)) {
+        blanks += 1
+      }
+    }
+    return blanks
   }
 
   function announce(board: BoardView): void {
@@ -219,38 +336,4 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     }
     return false
   }
-
-  // Exposed for the difficulty menu at M4. Kept here so the generating state and
-  // the session lifecycle live in one place rather than being duplicated later.
-  Object.assign(mount, {
-    mathscrossNewGame: (difficulty: Difficulty): void => {
-      const seed = drawSeed()
-      const notice = window.setTimeout(() => {
-        status.textContent = 'Generating a puzzle…'
-      }, GENERATING_NOTICE_MS)
-
-      const handle = client.request(seed, difficulty, {
-        onProgress: (attempt) => {
-          status.textContent = `Generating a puzzle… (attempt ${attempt})`
-        },
-      })
-
-      void handle.puzzle.then((outcome) => {
-        window.clearTimeout(notice)
-        if (!outcome.ok) {
-          status.textContent =
-            outcome.reason === 'cancelled'
-              ? 'Cancelled.'
-              : 'Could not make a puzzle. Please try again.'
-          return
-        }
-        start(outcome.puzzle.grid, difficulty, difficulty)
-      })
-    },
-  })
-}
-
-/** Whether a value counts as filled. Exported for tests. */
-export function isFilled(value: number | undefined): boolean {
-  return value !== undefined && value !== EMPTY
 }
