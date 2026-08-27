@@ -14,8 +14,6 @@
 export interface OnboardingView {
   readonly element: HTMLElement
   show(): void
-  hide(): void
-  readonly visible: boolean
 }
 
 export interface OnboardingCallbacks {
@@ -47,8 +45,9 @@ export function createOnboardingView(callbacks: OnboardingCallbacks): Onboarding
   dismiss.type = 'button'
   dismiss.className = 'button'
   dismiss.textContent = 'Got it'
-  // Does not hide itself. It is a screen now, and the router decides what shows,
-  // so hiding here would leave the router pointing at an empty screen.
+  // Does not hide itself, and offers no way to. It is a screen, so what is on
+  // display is the router's business: the card is shown whenever its screen is,
+  // and dismissing it only records the choice and navigates away.
   dismiss.addEventListener('click', () => callbacks.onDismiss())
 
   element.append(title, body, example, dismiss)
@@ -58,16 +57,5 @@ export function createOnboardingView(callbacks: OnboardingCallbacks): Onboarding
     dismiss.focus()
   }
 
-  function hide(): void {
-    element.hidden = true
-  }
-
-  return {
-    element,
-    show,
-    hide,
-    get visible(): boolean {
-      return !element.hidden
-    },
-  }
+  return { element, show }
 }

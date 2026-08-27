@@ -244,6 +244,24 @@ describe('a first-time player', () => {
 
     expect(visibleScreen(root)).toBe('howtoplay')
   })
+
+  it('shows the card, not an empty screen, on a return visit', () => {
+    // The screen being visible is not the same as it having anything on it. The
+    // card starts hidden and used to be shown only by the first-run branch, so a
+    // player who had dismissed it once and came back through the menu got a blank
+    // screen. The assertion above passed throughout, because it only asked which
+    // screen was showing.
+    const storage = memoryStorage()
+    const first = mount({ storage })
+    button(first, 'Got it').click()
+
+    const root = mount({ storage })
+    button(root, 'How to play').click()
+
+    const card = root.querySelector<HTMLElement>('.onboarding')
+    expect(card?.hidden).toBe(false)
+    expect(card?.textContent).toContain('Numbers span cells')
+  })
 })
 
 describe('navigation', () => {

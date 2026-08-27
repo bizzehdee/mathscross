@@ -77,3 +77,44 @@ never arrived, not that the rule is wrong. A forced reload settles it.
 Any change to `hidden` toggling, to a `min()` or `clamp()` sizing rule, or to a
 glyph used as an icon. Also any time a DOM test passes and something still looks
 wrong: the test is very likely asserting the property, not the pixel.
+
+## A fourth defect, found by a player and measured in the browser
+
+Reported as "the board jumps around in landscape when I click between a number
+square and an operator square". Measured on an 844x390 board:
+
+| Focused cell | Board x | Board width | Keypad width |
+|---|---|---|---|
+| digit | 12 | 186.8 | 425.3 |
+| operator | 88.8 | 224 | 200 |
+
+So the board moved 76.8px **and resized by 20%** on every switch between the two
+kinds of cell — the cell under the finger was no longer under the finger.
+
+Three things compounded, and it took the measurement to separate them:
+
+1. The keypad is as wide as whichever pad is showing: ten digit keys make it
+   425px, two to four operator keys make it 200px.
+2. `.layout` centres its row, so a narrower keypad re-centred the board.
+3. The board is an ordinary flex item, so with the wider digit pad the row
+   overflowed and **the board was shrunk** — discarding the size its own `min()`
+   had just computed.
+
+Fixing any one of these leaves a visible defect: without (3) the board still
+resizes, without (2) it still shifts.
+
+The same root cause had a second, unreported form. In the stacked layout the pads
+differ in *height* (148px for two rows of digits, 96px for one row of operators),
+which moved Clear, Undo, Redo and the clock by 52px. Confirmed by removing the new
+`min-height` in the browser and re-measuring: 615.9 → 563.9.
+
+**The general rule this adds: a component whose size depends on its contents must
+not be a sibling of anything whose position matters.** Either give it a fixed box
+or stop the neighbour from responding. Both fixes here are floors — a fixed keypad
+width and a two-row `min-height` — chosen over letting the layout react, because a
+layout that reacts to a selection is a layout that moves under the player's finger.
+
+And the verification method: read `getBoundingClientRect()` before and after the
+interaction, then toggle the candidate rule off in the browser and re-measure. That
+turns "it looks like it jumps" into two numbers and a cause, and it is the only way
+found so far to check a layout rule that no test can see.

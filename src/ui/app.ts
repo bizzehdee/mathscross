@@ -239,7 +239,6 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     router.reset('home')
     showScreen('home')
   } else {
-    onboarding.show()
     router.reset('howtoplay')
     showScreen('howtoplay')
   }
@@ -262,6 +261,14 @@ export function mountApp(mount: HTMLElement, options: AppOptions): void {
     }
     if (screen === 'stats') {
       statsView.render(stats)
+    }
+    // The card is the whole of this screen, and it starts hidden so that a
+    // returning player does not see it flash past on the way to home. Showing it
+    // here rather than only at mount: a player who has dismissed it once and
+    // then chooses "How to play" from the menu got the screen with nothing on it,
+    // because the only call to show it was the first-run branch below.
+    if (screen === 'howtoplay') {
+      onboarding.show()
     }
   }
 

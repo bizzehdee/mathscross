@@ -143,6 +143,33 @@ body {
     align-items: flex-start;
     justify-content: center;
   }
+
+  /* The board must not move or resize when the entry pad changes.
+
+     Measured on an 844x390 landscape board before this rule: focusing a digit
+     cell gave a 186.8px board at x=12, and focusing an operator cell gave a
+     224px board at x=88.8. Switching between the two kinds of cell moved the
+     board 76.8px and resized it by 20%, so the cell under the finger was no
+     longer under the finger.
+
+     Two causes, and both need fixing. The keypad is as wide as whichever pad is
+     showing -- 425px for the ten digits, 200px for the operators -- so centring
+     the row moved it. And the board, being an ordinary flex item, was shrunk
+     below its computed size to make room for the wider pad, which threw away the
+     sizing the min() above had just worked out.
+
+     Fixing only the centring would leave the resize; fixing only the shrink
+     would leave the shift. */
+  .board {
+    flex-shrink: 0;
+  }
+
+  /* One width, whichever pad is showing. Matches the pad's own 22rem cap, so the
+     digits fill it exactly and the operators are centred within the same box. */
+  .keypad {
+    flex: 0 0 auto;
+    width: min(22rem, 100%);
+  }
 }
 
 /* Animation is effectively absent by design: a transition on cell entry would
@@ -322,7 +349,20 @@ body {
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: center;
+  align-content: flex-start;
   max-width: min(100%, 22rem);
+  /* Two rows of keys, always.
+
+     The ten digits wrap onto two rows and the operators need one, so without a
+     floor the pad is 148px tall for a digit cell and 96px for an operator cell.
+     In the stacked layout the keypad sits above the controls, so that difference
+     moved Clear, Undo, Redo and the clock by 52px on every switch between the
+     two kinds of cell -- the same defect as the board shifting in landscape, one
+     axis over.
+
+     Held to the top rather than centred in the reserved space, so a single row
+     of operators stays where the eye last saw a row of keys. */
+  min-height: calc(2 * var(--tap-min) + var(--space-2));
 }
 
 .keypad__pad--digits .keypad__key {

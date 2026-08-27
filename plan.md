@@ -1050,6 +1050,16 @@ Follow `src/styles/layout.css` from the sibling:
   height.
 - Size all controls from `--tap-min`, which is 44 px everywhere.
 - Give `:focus-visible` a 3 px accent outline.
+- **The board must not move or resize when the selection changes.** Reported by a
+  player: clicking between a digit cell and an operator cell moved the board 76.8 px
+  and resized it by 20% in landscape. The keypad is as wide as whichever pad is
+  showing, the row is centred, and the board — an ordinary flex item — was shrunk to
+  make room, discarding the size its own `min()` had computed. So: the keypad takes
+  one fixed width in the side-by-side layout, and `.board` gets `flex-shrink: 0`
+  there. Both are needed; either alone leaves a visible defect. The stacked layout
+  has the same problem one axis over, because the pads differ in height, so the pad
+  reserves two rows of keys always. Measured figures and the method are in
+  `.learnings/dom-tests-do-not-see-css.md`.
 
 ### 8.3 Touch response inside the WebView
 
@@ -1146,6 +1156,9 @@ of that. Any future dependency must state its gzipped cost in the pull request.
   - An operator pad for masked `operator` cells, showing only the difficulty's
     allowed operators. A sign-position cell offers `-` alone.
   Switch pads from the focused cell's kind. Do not offer operators for a digit cell.
+  **Switching pads must not change the keypad's footprint** — see section 8.2. A pad
+  sized by its contents, next to anything whose position matters, moves the board
+  under the player's finger.
 - Do not rely on the native Android soft keyboard. It resizes the viewport and
   obscures the grid.
 - Support keyboard entry on web: arrow keys move focus, digits and `+ - * /` enter
@@ -1228,15 +1241,26 @@ requires.
 
 Two details that are easy to get wrong:
 
-- **A game is left, not abandoned.** The board is saved on every entry, so walking
-  away and returning is the same as never leaving. Leaving the game returns to home
-  rather than to whichever screen launched it.
+- **A game is left, not abandoned.** Walking away and returning is the same as never
+  leaving: entries are saved as they are made, and the router stops the clock and
+  records the elapsed total on the way out — see section 7.3. Leaving the game
+  returns to home rather than to whichever screen launched it.
 - **Starting a game resets the stack through home**, so anything the transition
   clears — the header subtitle, for one — must be set *after* navigating rather than
   before.
 
 A first-time player lands on how to play rather than having a card appear over the
 menu, and can return to it from home at any time.
+
+**Each screen shows its own contents when the router arrives at it.** `showScreen`
+is where that happens, alongside rendering the statistics. The how-to-play card
+starts hidden so a returning player does not see it flash past on the way to home,
+and it was shown only by the first-run branch — so every later visit rendered an
+empty screen, under a test that asserted which screen was showing and nothing about
+what was on it. See
+`.learnings/a-visible-screen-is-not-a-populated-one.md`; the rule it draws out is
+that a test for a visible screen must assert something that is false when the screen
+is empty.
 
 **Finishing gets a dialog, not a status line.** Completing a puzzle is the moment the
 game exists for, and announcing it in the status region is an anticlimax. The dialog

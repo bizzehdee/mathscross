@@ -39,6 +39,10 @@ true on one machine only. See
   event; and the defect was untestable until the clock was injected into
   `mountApp`. Read before touching the timer, the save points, or screen
   navigation.
+- [a-visible-screen-is-not-a-populated-one.md](a-visible-screen-is-not-a-populated-one.md)
+  — "How to play" rendered an empty screen on every visit after the first, under a
+  test that asserted which screen was showing and nothing about its contents. Read
+  before asserting that a screen, dialog or route is visible.
 - [dom-tests-do-not-see-css.md](dom-tests-do-not-see-css.md) — jsdom parses no
   stylesheet, so three real defects passed 46 green DOM tests: `hidden` losing to a
   layout class, a `min()` width computing negative and collapsing an element, and a
