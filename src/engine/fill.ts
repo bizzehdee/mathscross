@@ -50,7 +50,8 @@ import {
   type ParsedGrid,
 } from './parse'
 import type { Rng } from './rng'
-import { solveForMissing, writeNumberIfConsistent } from './numbers'
+import {
+  isDegenerateOperation, solveForMissing, writeNumberIfConsistent } from './numbers'
 import { EMPTY, Operator, type Grid } from './types'
 
 export interface FillOptions {
@@ -144,6 +145,22 @@ function fillEquation(
 
       const derived = solveForMissing(operator, drawn)
       if (derived === null || !valueInRange(derived, parameters)) {
+        continue
+      }
+      // Reject the arithmetically true but pointless, such as `9 + 0`. Checked
+      // here rather than on the drawn terms alone, because the derived term is an
+      // operand for two of the three targets: deriving `a` from `b` and `c`
+      // can produce `a` of zero however `b` was drawn.
+      const triple = { ...drawn, [target]: derived } as {
+        a?: number
+        b?: number
+        c?: number
+      }
+      if (
+        triple.a !== undefined &&
+        triple.b !== undefined &&
+        isDegenerateOperation(operator, triple.a, triple.b)
+      ) {
         continue
       }
       if (!writeNumberIfConsistent(grid, termOf(shape, target), derived)) {

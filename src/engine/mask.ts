@@ -31,7 +31,7 @@ import { parametersFor, type Difficulty } from './difficulty'
 import { cloneGrid } from './grid'
 import type { ParsedGrid } from './parse'
 import type { Rng } from './rng'
-import { hasUniqueSolution } from './solver'
+import { hasUniqueSolution, solve } from './solver'
 import { CellKind, EMPTY, type Grid } from './types'
 
 export interface MaskOptions {
@@ -80,6 +80,37 @@ export function maskGrid(solved: Grid, options: MaskOptions): MaskResult {
   const operatorTarget = Math.round(operatorCells.length * parameters.operatorMaskRatio)
 
   let checks = 0
+
+  /**
+   * Whether the grid is still an acceptable puzzle with this cell blank.
+   *
+   * Uniqueness always. Deducibility as well where the difficulty asks for it —
+   * checked here, per cell, rather than once on the finished board, because a
+   * board rejected at the end throws away every mask that preceded it. Enforcing
+   * it as each cell is masked instead means the mask simply stops growing at the
+   * point deduction can no longer reach, which costs density and never costs an
+   * attempt.
+   *
+   * The two solves cannot be merged. Uniqueness needs the whole space explored to
+   * prove there is no second answer; deducibility needs to know whether the first
+   * answer was reached without ever branching. The second is much the cheaper of
+   * the two — it stops at the first stall — so it runs first, and for a deducible
+   * difficulty most rejections never reach the uniqueness check at all.
+   */
+  const isAcceptable = (candidate: Grid): boolean => {
+    if (parameters.requireDeducible) {
+      const deduced = solve(candidate, {
+        operators: parameters.operators,
+        parsed,
+        maxSolutions: 1,
+      })
+      if (deduced.count !== 1 || deduced.techniques.has('search')) {
+        return false
+      }
+    }
+    return hasUniqueSolution(candidate, { operators: parameters.operators, parsed })
+  }
+
   const tryMask = (cell: number): boolean => {
     const held = grid.values[cell]
     if (held === undefined || held === EMPTY) {
@@ -87,7 +118,7 @@ export function maskGrid(solved: Grid, options: MaskOptions): MaskResult {
     }
     grid.values[cell] = EMPTY
     checks += 1
-    if (hasUniqueSolution(grid, { operators: parameters.operators, parsed })) {
+    if (isAcceptable(grid)) {
       return true
     }
     grid.values[cell] = held

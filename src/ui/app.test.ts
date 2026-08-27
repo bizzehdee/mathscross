@@ -198,8 +198,17 @@ describe('the start screen', () => {
     const root = mountReady()
     const difficulties = [...root.querySelectorAll<HTMLElement>('[data-difficulty]')]
 
-    expect(difficulties.map((element) => element.textContent)).toEqual(['Easy', 'Medium', 'Hard'])
-    expect(difficulties[2]?.getAttribute('aria-label')).toContain('every operator hidden')
+    expect(difficulties.map((element) => element.textContent)).toEqual([
+      'Easy',
+      'Medium',
+      'Hard',
+      'Extreme',
+    ])
+    expect(difficulties[3]?.getAttribute('aria-label')).toContain('every operator hidden')
+    // The two grades a child plays say so, because "solvable by logic" is the
+    // property being promised and it is not visible from the grid size.
+    expect(difficulties[0]?.getAttribute('aria-label')).toContain('solvable by logic')
+    expect(difficulties[1]?.getAttribute('aria-label')).toContain('solvable by logic')
   })
 
   it('offers the daily, and says when it rolls over', () => {

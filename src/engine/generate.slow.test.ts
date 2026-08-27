@@ -12,9 +12,9 @@ import { CellKind } from './types'
 /**
  * 100 seeds per difficulty, per plan section 13.4.
  *
- * Runs nightly, on tags, and on demand — never on a pull request. Hard needs a
- * median of 830 ms per puzzle, so this suite is minutes of compute for a signal
- * that changes rarely. Plan section 10.4.
+ * Runs nightly, on tags, and on demand — never on a pull request. Extreme needs a
+ * median of about 1.1 s per puzzle, so this suite is minutes of compute for a
+ * signal that changes rarely. Plan section 10.4.
  */
 const SEED_COUNT = 100
 

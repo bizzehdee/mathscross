@@ -38,14 +38,19 @@ export function previousDateKey(date: Date): string {
  * Difficulty by UTC weekday, easing up through the week. Plan section 5.7.
  *
  * Indexed by `getUTCDay`, where 0 is Sunday.
+ *
+ * Four grades over seven days, with the week starting gently: two deducible days,
+ * two more, then two that permit guessing, and Extreme once a week. Sunday holds
+ * the hardest so that the one day a player is most likely to have time for it is
+ * the day it appears — and so that missing it costs a streak only once a week.
  */
 const BY_UTC_DAY: readonly Difficulty[] = [
-  Difficulty.Hard, // Sunday
+  Difficulty.Extreme, // Sunday
   Difficulty.Easy, // Monday
   Difficulty.Easy, // Tuesday
   Difficulty.Medium, // Wednesday
   Difficulty.Medium, // Thursday
-  Difficulty.Medium, // Friday
+  Difficulty.Hard, // Friday
   Difficulty.Hard, // Saturday
 ]
 

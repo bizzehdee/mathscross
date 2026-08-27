@@ -49,12 +49,16 @@ describe('which operators are offered', () => {
     expect(visibleOperators(easy.view)).toEqual(['Plus', 'Minus'])
 
     const hard = mount(Difficulty.Hard)
-    expect(visibleOperators(hard.view)).toEqual(['Plus', 'Minus', 'Times', 'Divided by'])
+    expect(visibleOperators(hard.view)).toEqual(['Plus', 'Minus', 'Times'])
+
+    const extreme = mount(Difficulty.Extreme)
+    expect(visibleOperators(extreme.view)).toEqual(['Plus', 'Minus', 'Times', 'Divided by'])
   })
 
-  it('omits division at Medium', () => {
-    const medium = mount(Difficulty.Medium)
-    expect(visibleOperators(medium.view)).not.toContain('Divided by')
+  it('offers division at Extreme alone', () => {
+    for (const difficulty of [Difficulty.Easy, Difficulty.Medium, Difficulty.Hard]) {
+      expect(visibleOperators(mount(difficulty).view), difficulty).not.toContain('Divided by')
+    }
   })
 })
 
@@ -68,9 +72,9 @@ describe('the pad follows the focused cell', () => {
   })
 
   it('shows operators for an operator cell and hides digits', () => {
-    // Hard masks every operator, so this is the ordinary case there rather than
-    // an edge one.
-    const view = mount(Difficulty.Hard)
+    // Extreme masks every operator, so this is the ordinary case there rather
+    // than an edge one.
+    const view = mount(Difficulty.Extreme)
     view.view.showFor(CellKind.Operator, false)
 
     expect(pad(view.view, 'operators').hidden).toBe(false)
@@ -109,12 +113,20 @@ describe('entry', () => {
   })
 
   it('reports the operator pressed as its stored value, not its glyph', () => {
-    const view = mount(Difficulty.Hard)
+    const view = mount(Difficulty.Extreme)
     view.view.showFor(CellKind.Operator, false)
 
-    pad(view.view, 'operators')
-      .querySelector<HTMLElement>('[aria-label="Divided by"]')
-      ?.click()
+    // Not an optional call. When this test was pointed at a grade without
+    // division the selector returned null, the click was silently skipped, and
+    // the failure read "expected [] to equal [3]" — which says nothing about the
+    // button being absent. A missing key should fail as a missing key.
+    const key = pad(view.view, 'operators').querySelector<HTMLElement>(
+      '[aria-label="Divided by"]',
+    )
+    if (key === null) {
+      throw new Error('no division key on the operator pad')
+    }
+    key.click()
 
     expect(view.values).toEqual([Operator.Divide])
   })

@@ -134,6 +134,13 @@ export function generate(request: GenerateRequest): GenerateResult {
     if (check.count !== 1) {
       continue
     }
+    // The mask enforces this per cell, so reaching here with a puzzle that needs
+    // guessing would mean the two disagree. Asserted rather than assumed, because
+    // the promise made to a player at these grades is that no guess is required,
+    // and a silent breach of it is indistinguishable from a hard puzzle.
+    if (parameters.requireDeducible && check.techniques.has('search')) {
+      continue
+    }
 
     return {
       ok: true,

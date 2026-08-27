@@ -129,3 +129,33 @@ became Medium" actually looks like.
 Before changing the attempt cap, the node budget, the masking order, or any
 density target. Also before concluding a difficulty is slow because of the code:
 in four cases out of four here, it was a decision.
+
+## Re-measured after the four-grade re-grade, 2026-08-27
+
+The scale changed: a new Medium was inserted, the old Medium became Hard and the old
+Hard became Extreme. Easy and Medium now guarantee a guess-free route, enforced per
+masked cell. 25 seeds per grade, plus 100 per grade in the slow suite.
+
+| grade | guess-free | blanks | median | worst | attempts |
+|---|---|---|---|---|---|
+| Easy | 25/25 | 6.0 | 0 ms | 3 ms | 1.2 |
+| Medium | 25/25 | 12.0 | 2 ms | 8 ms | 2.0 |
+| Hard | 0/25 | 16.6 | 18 ms | 118 ms | 2.0 |
+| Extreme | 0/25 | 31.0 | 1094 ms | 2021 ms | 3.3 |
+
+Zero failures. The blanks column is the ladder, and it is asserted by a test rather
+than assumed: each grade must leave more blanks than the one below.
+
+Two things to carry forward.
+
+**Extreme got slower than the identical grade did before, 1094 ms against 830 ms
+median.** The parameters did not change. The cost is the new rule rejecting
+degenerate arithmetic — `a + 0`, `a * 1` and the rest — which makes the fill redraw.
+Worth knowing before attributing a future slowdown to the mesh or the solver: a
+constraint on *values* shows up as a cost in the *fill*, one stage away from where it
+is written.
+
+**Guess-free enforcement is nearly free at Medium and would not be at Extreme.**
+2 ms against 18 ms and 1094 ms for the grades above it, and those grades do far more
+masking. The reason Medium is cheap is that its rule is checked incrementally; see
+[enforce-acceptance-where-the-work-happens.md](enforce-acceptance-where-the-work-happens.md).

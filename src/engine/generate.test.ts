@@ -4,11 +4,12 @@ import { boardState, readNumber } from './evaluate'
 import { generate } from './generate'
 import { candidatePatterns, buildMesh, meshProblems, nonAdjacentSubsets } from './mesh'
 import { densityWithinTolerance } from './mask'
-import { parseGrid } from './parse'
+import { isDegenerateOperation, knownValue } from './numbers'
+import { binaryShape, parseGrid } from './parse'
 import { createRng, hashString } from './rng'
 import { STARTER_DIFFICULTY, starterGrid } from './starter'
 import { solve } from './solver'
-import { CellKind, EMPTY } from './types'
+import { CellKind, EMPTY, Operator } from './types'
 
 /** A few fixed seeds. The fast suite is a smoke test; the slow suite sweeps. */
 const SEEDS = [1, 2, 3, 7, 11, 12345]
@@ -34,6 +35,132 @@ function generated(seed: number, difficulty: Difficulty): ReturnType<typeof gene
   cache.set(key, fresh)
   return fresh
 }
+
+describe('the promises each grade makes', () => {
+  it('makes every Easy and Medium puzzle solvable without guessing', () => {
+    // The grades a child plays. The solver records 'search' the moment
+    // propagation stalls and it has to try a value, so its absence means there is
+    // a chain of forced steps from the givens to the answer.
+    //
+    // Measured before the rule existed: Easy was 30 of 30 deducible and Medium
+    // was 0 of 30 — every Medium board required guessing, which is what made the
+    // step up from Easy a cliff rather than a step.
+    for (const difficulty of [Difficulty.Easy, Difficulty.Medium]) {
+      expect(parametersFor(difficulty).requireDeducible, difficulty).toBe(true)
+      for (const seed of SEEDS) {
+        const result = generated(seed, difficulty)
+        expect(result.ok, `${difficulty} seed ${seed}`).toBe(true)
+        if (!result.ok) {
+          continue
+        }
+        expect(result.puzzle.techniques.has('search'), `${difficulty} seed ${seed}`).toBe(false)
+      }
+    }
+  })
+
+  it('does not promise the same of Hard and Extreme', () => {
+    // Stated so that turning the flag on everywhere is a deliberate act rather
+    // than a drift. These grades guarantee one answer, not a guess-free route to
+    // it, and their densities depend on that freedom.
+    for (const difficulty of [Difficulty.Hard, Difficulty.Extreme]) {
+      expect(parametersFor(difficulty).requireDeducible, difficulty).toBe(false)
+    }
+  })
+
+  it('keeps operators on show below Hard', () => {
+    // Deducing which operator a cell holds is a different kind of reasoning from
+    // arithmetic, and the two kid grades introduce one thing at a time.
+    expect(parametersFor(Difficulty.Easy).operatorMaskRatio).toBe(0)
+    expect(parametersFor(Difficulty.Medium).operatorMaskRatio).toBe(0)
+    expect(parametersFor(Difficulty.Hard).operatorMaskRatio).toBeGreaterThan(0)
+  })
+
+  it('keeps negatives out of the two kid grades', () => {
+    expect(parametersFor(Difficulty.Easy).allowNegative).toBe(false)
+    expect(parametersFor(Difficulty.Medium).allowNegative).toBe(false)
+    expect(parametersFor(Difficulty.Hard).allowNegative).toBe(true)
+  })
+
+  it('gives more blanks at each grade than the one below', () => {
+    // The ramp itself, asserted. A grade that asked less of a player than the one
+    // below would be a mislabelled grade however its parameters read.
+    const blanks = ALL_DIFFICULTIES.map((difficulty) => {
+      const counts = SEEDS.map((seed) => {
+        const result = generated(seed, difficulty)
+        if (!result.ok) {
+          return 0
+        }
+        let empty = 0
+        const { kinds, values } = result.puzzle.puzzle
+        for (let cell = 0; cell < values.length; cell += 1) {
+          if (kinds[cell] !== CellKind.Block && values[cell] === EMPTY) {
+            empty += 1
+          }
+        }
+        return empty
+      })
+      return counts.reduce((a, b) => a + b, 0) / counts.length
+    })
+
+    for (let i = 1; i < blanks.length; i += 1) {
+      expect(blanks[i], `${ALL_DIFFICULTIES[i]} against ${ALL_DIFFICULTIES[i - 1]}`).toBeGreaterThan(
+        blanks[i - 1] ?? 0,
+      )
+    }
+  })
+})
+
+describe('arithmetic worth asking', () => {
+  it('rejects identities and annihilators', () => {
+    // Reported as an Easy board whose three answers were 1 + 0, 7 - 0 and 9 + 0.
+    expect(isDegenerateOperation(Operator.Plus, 9, 0)).toBe(true)
+    expect(isDegenerateOperation(Operator.Plus, 0, 9)).toBe(true)
+    expect(isDegenerateOperation(Operator.Minus, 7, 0)).toBe(true)
+    expect(isDegenerateOperation(Operator.Times, 6, 1)).toBe(true)
+    expect(isDegenerateOperation(Operator.Times, 6, 0)).toBe(true)
+    expect(isDegenerateOperation(Operator.Divide, 6, 1)).toBe(true)
+    expect(isDegenerateOperation(Operator.Divide, 0, 6)).toBe(true)
+  })
+
+  it('allows the ones that still ask something', () => {
+    // 0 - b is how a negative is introduced. a - a and a / a have a constant
+    // result but require noticing that the operands match. A result of zero from
+    // a real operation is fine.
+    expect(isDegenerateOperation(Operator.Minus, 0, 5)).toBe(false)
+    expect(isDegenerateOperation(Operator.Minus, 7, 7)).toBe(false)
+    expect(isDegenerateOperation(Operator.Divide, 6, 6)).toBe(false)
+    expect(isDegenerateOperation(Operator.Plus, 2, 3)).toBe(false)
+    expect(isDegenerateOperation(Operator.Times, 3, 4)).toBe(false)
+  })
+
+  it('puts none of them on a generated board', () => {
+    for (const difficulty of ALL_DIFFICULTIES) {
+      for (const seed of SEEDS) {
+        const result = generated(seed, difficulty)
+        if (!result.ok) {
+          continue
+        }
+        const solved = result.puzzle.solution
+        for (const equation of parseGrid(solved).equations) {
+          const shape = binaryShape(equation)
+          if (shape === null) {
+            continue
+          }
+          const a = knownValue(solved, shape.left)
+          const b = knownValue(solved, shape.right)
+          const operator = solved.values[shape.operatorCell]
+          if (a === null || b === null || operator === undefined) {
+            continue
+          }
+          expect(
+            isDegenerateOperation(operator as Operator, a, b),
+            `${difficulty} seed ${seed}: ${a} op${operator} ${b}`,
+          ).toBe(false)
+        }
+      }
+    }
+  })
+})
 
 describe('the mesh', () => {
   it('offers at least one pattern per difficulty', () => {

@@ -64,9 +64,9 @@ describe('difficulty rotation', () => {
       ['2026-08-25T12:00:00Z', Difficulty.Easy],
       ['2026-08-26T12:00:00Z', Difficulty.Medium],
       ['2026-08-27T12:00:00Z', Difficulty.Medium],
-      ['2026-08-28T12:00:00Z', Difficulty.Medium],
+      ['2026-08-28T12:00:00Z', Difficulty.Hard],
       ['2026-08-29T12:00:00Z', Difficulty.Hard],
-      ['2026-08-30T12:00:00Z', Difficulty.Hard],
+      ['2026-08-30T12:00:00Z', Difficulty.Extreme],
     ] as const
 
     for (const [iso, expected] of days) {

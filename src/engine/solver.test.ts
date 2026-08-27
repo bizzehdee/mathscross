@@ -7,7 +7,7 @@ import { Operator } from './types'
 
 const EASY = parametersFor(Difficulty.Easy)
 const MEDIUM = parametersFor(Difficulty.Medium)
-const HARD = parametersFor(Difficulty.Hard)
+const EXTREME = parametersFor(Difficulty.Extreme)
 
 describe('a single solution', () => {
   it('solves one blank digit', () => {
@@ -18,9 +18,9 @@ describe('a single solution', () => {
   })
 
   it('solves a blank operator', () => {
-    // Hard's operator set, because division is the only operator giving three
-    // here and Medium does not include it.
-    const result = solve(singleRowGrid('9 @ 3 = 3'), { operators: HARD.operators })
+    // Extreme's operator set, because division is the only operator giving three
+    // here and no lower grade includes it.
+    const result = solve(singleRowGrid('9 @ 3 = 3'), { operators: EXTREME.operators })
 
     expect(result.count).toBe(1)
     expect(result.first?.[1]).toBe(Operator.Divide)

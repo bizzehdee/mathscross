@@ -49,6 +49,52 @@ export function applyOperator(operator: Operator, a: number, b: number): number 
   }
 }
 
+/**
+ * Whether `a op b` is arithmetically true but not worth asking.
+ *
+ * Reported by a player: an Easy board whose three answers were `1 + 0`, `7 - 0`
+ * and `9 + 0`. Every one is correct, and none of them is a question — an identity
+ * or an annihilator has a right-hand side the player can copy without doing any
+ * arithmetic at all, so it fills a cell without teaching anything.
+ *
+ * These were over-represented rather than merely possible. The fill draws two
+ * terms and derives the third, and zero survives more draws than any other value:
+ * it is in range for every difficulty, it never overflows the derived term, and
+ * for addition and subtraction it cannot make the result leave the range either.
+ * The freest value wins the most draws.
+ *
+ * Rejected, per operator:
+ *
+ * - `a + 0`, `0 + b`      — the result is the other operand.
+ * - `a - 0`               — likewise.
+ * - `a * 0`, `0 * b`      — the result is always zero.
+ * - `a * 1`, `1 * b`      — the result is the other operand.
+ * - `a / 1`               — likewise.
+ * - `0 / b`               — the result is always zero.
+ *
+ * Deliberately still allowed: `0 - b`, which is how a negative is introduced and
+ * is worth asking wherever negatives are in range; `a - a` and `a / a`, which
+ * have a constant result but require noticing that the operands match; and a
+ * *result* of zero from a genuine operation, such as `7 - 7`.
+ *
+ * This is a rule about the arithmetic, not about a grade, so it is not a
+ * difficulty parameter. No difficulty is improved by `9 + 0`.
+ */
+export function isDegenerateOperation(operator: Operator, a: number, b: number): boolean {
+  switch (operator) {
+    case Operator.Plus:
+      return a === 0 || b === 0
+    case Operator.Minus:
+      return b === 0
+    case Operator.Times:
+      return a === 0 || b === 0 || a === 1 || b === 1
+    case Operator.Divide:
+      return b === 1 || a === 0
+    default:
+      return false
+  }
+}
+
 /** How many cells of a number already hold a digit. */
 export function knownDigitCount(grid: Grid, token: NumberToken): number {
   let known = 0

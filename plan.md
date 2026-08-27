@@ -305,17 +305,18 @@ difference as a bug and "fix" it.
 Hold this table in one place, `src/engine/difficulty.ts`. Do not spread these values
 across the generator, the solver, and the UI.
 
-| Parameter | Easy | Medium | Hard |
-|---|---|---|---|
-| Grid dimensions | 5 x 5 | 7 x 7 | 9 x 9 |
-| Equation length | 5 cells | 5 to 7 cells | 5 to 9 cells |
-| Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` `/` |
-| Derived value range | 0 to 9 | -99 to 99 | -999 to 999 |
-| Intersection count | 2 to 4 | 5 to 8 | 10 or more |
-| Division | not used | integer results only | integer results only |
-| `allowNegative` | false | true | true |
-| Digit masking | 40% | 50% | 45% |
-| Operator masking | 0% | 30% | 100% |
+| Parameter | Easy | Medium | Hard | Extreme |
+|---|---|---|---|---|
+| Grid dimensions | 5 x 5 | 7 x 7 | 7 x 7 | 9 x 9 |
+| Equation length | 5 cells | 5 to 7 cells | 5 to 7 cells | 5 to 9 cells |
+| Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` | `+` `-` `*` `/` |
+| Derived value range | 0 to 9 | 0 to 99 | -99 to 99 | -999 to 999 |
+| Intersection count | 2 to 4 | 5 to 8 | 5 to 8 | 10 or more |
+| Division | not used | not used | not used | integer results only |
+| `allowNegative` | false | false | true | true |
+| Digit masking | 40% | 35% | 50% | 45% |
+| Operator masking | 0% | 0% | 30% | 100% |
+| **Solvable without guessing** | **guaranteed** | **guaranteed** | not guaranteed | not guaranteed |
 
 Notes on this table:
 
@@ -323,23 +324,77 @@ Notes on this table:
   teaching the game. Its parameters are unchanged and are already gentle: single
   digits, `+` and `-` only, and no masked operators. What Easy gains instead is the
   onboarding requirement in section 8.7.
-- **The mask ratios are measured, not chosen.** M2 measured all three difficulties
-  over 60 seeds and set each target to what uniqueness actually allows. Digit
-  masking moved from 60% to 50% at Medium and from 75% to 45% at Hard; both are now
+- **The scale was re-graded after a player reported the ramp.** The complaint was
+  that Medium felt like Hard, Hard felt like Extreme, and Easy to Medium was a huge
+  jump, "especially for kids". Measurement agreed, and gave a sharper reason than
+  the parameters do on their own: **Easy was 30 of 30 solvable by deduction and the
+  old Medium was 0 of 30.** Every board at the second grade required guessing. That
+  is not a harder version of the first grade; it is a different game. Easy to the
+  old Medium also changed seven things at once — grid size, equation length, a third
+  operator, multi-cell numbers, negatives, more intersections and hidden operators —
+  including the two hardest together. The new Medium takes three of those steps.
+  The old Medium became Hard and the old Hard became Extreme, both unchanged:
+  nothing was discarded, it was relabelled and a rung inserted.
+- **Easy and Medium guarantee a guess-free route, and it is enforced.** A masked
+  candidate is rejected unless constraint propagation finishes the board without
+  ever branching. Both techniques propagation uses are ones a child can do — an
+  equation with one blank determines that blank; a cell where two equations cross
+  takes only the values both allow — so the guarantee is conservative rather than
+  exact. A rejected puzzle might still be deducible by a person reasoning about
+  magnitude or parity, which the engine cannot. Conservative is the right direction
+  for the grades a child plays.
+- **The parameters alone do not achieve it.** Measured with the rule disabled, the
+  new Medium is **0 of 40** deducible even at 35% digit masking, with every operator
+  shown and no negatives. Fewer blanks make a puzzle shorter, not more logical. The
+  enforcement is doing the work, not the tuning — which is worth knowing before
+  anyone tries to reach the same result by moving the ratios.
+- **Enforce it per masked cell, not on the finished board.** Both were measured.
+  Rejecting at the end costs Medium 263 attempts and a 277 ms median; checking as
+  each cell is masked costs 2.0 attempts and 2 ms, which is 138 times faster. A
+  board rejected at the end throws away every mask that preceded it, whereas a
+  per-cell check simply stops the mask growing at the point deduction can no longer
+  reach. The cost then lands on density, which is recoverable, instead of on
+  attempts, which are not. Section 5.4.
+- **The mask ratios are measured, not chosen.** M2 measured them over 60 seeds and
+  set each target to what uniqueness actually allows. Digit masking moved from 60%
+  to 50% at what is now Hard, and from 75% to 45% at what is now Extreme; both are
   met rather than merely approached. Raising them again needs a stronger solver, not
   a bigger time budget: see `.learnings/generation-measurements.md` for the specific
   missing capability.
-- **Hard's 100% operator masking holds.** M0.5 doubted it and this section
+- **Extreme's 100% operator masking holds.** M0.5 doubted it and this section
   previously demoted it to a hypothesis. M2 measured it reached in full — but only
-  once operators are masked *before* digits. Masking digits first left Hard at 14%
-  while Medium reached 40%, inverting the ladder on its most distinctive dimension.
-  It was never the density that was wrong, only the order. Section 5.4 step 1.
-- **Hard shows more digit givens than Medium**, at 45% against 50%. That is
-  deliberate and it is not a ladder inversion: Hard hides *every* operator, uses
+  once operators are masked *before* digits. Masking digits first left it at 14%,
+  inverting the ladder on its most distinctive dimension. It was never the density
+  that was wrong, only the order. Section 5.4 step 1.
+- **Extreme shows more digit givens than Hard**, at 45% against 50%. That is
+  deliberate and it is not a ladder inversion: Extreme hides *every* operator, uses
   three-digit values and division, and runs on a 9 x 9. Operator masking is the
-  dominant difficulty lever, and it is the scarce one.
+  dominant difficulty lever, and it is the scarce one. The ladder is asserted
+  directly instead, on blanks per board: measured 6.0, 12.0, 16.6 and 31.0, with a
+  test that fails if any grade ever asks less than the one below it.
 - `--tap-min` is 44 px at every difficulty. The enlarged target existed only for the
   Kids tier.
+
+### 2.7.1 Arithmetic worth asking
+
+No difficulty may set a question whose answer can be copied rather than worked out.
+Reported as an Easy board whose three answers were `1 + 0`, `7 - 0` and `9 + 0`.
+
+Rejected everywhere, as a property of the arithmetic rather than of a grade: `a + 0`,
+`0 + b`, `a - 0`, `a * 0`, `0 * b`, `a * 1`, `1 * b`, `a / 1` and `0 / b`.
+
+Still allowed, deliberately: `0 - b`, which is how a negative is introduced and is
+worth asking wherever negatives are in range; `a - a` and `a / a`, which have a
+constant result but require noticing that the operands match; and a *result* of zero
+from a real operation, such as `7 - 7`.
+
+These were over-represented rather than merely possible, and the reason is worth
+recording because it applies to any value the fill can draw freely. The fill draws
+two terms and derives the third, and zero survives more draws than any other value:
+it is in range for every difficulty, it never overflows the derived term, and under
+addition and subtraction it cannot push the result out of range either. **The freest
+value wins the most draws.** Measured after the rule: zero degenerate operations
+across 100 puzzles spanning all four grades.
 
 ### 2.8 Reference board
 
@@ -733,11 +788,14 @@ The design that follows:
    not as a crash.
 3. **The UI shows a generating state after 150 ms**, with progress and a cancel
    control. A player must never face a frozen screen.
-4. **Measured at M2.** Easy generates in 0 ms median and 3 ms worst; Medium in 24 ms
-   median and 290 ms worst; Hard in 830 ms median and 1951 ms worst, needing a median
-   of 3 attempts and 10 at worst. Zero failures in 180 generations. The 5000-attempt
-   cap is therefore far above the operating range, which is the right side to err on.
-   Figures and the four decisions that dominated them are in
+4. **Measured at M2, and again after the re-grade.** Easy generates in 0 ms median
+   and 3 ms worst; Medium in 2 ms and 8 ms; Hard in 18 ms and 118 ms; Extreme in
+   1094 ms median and 2021 ms worst, needing a median of 3 attempts. Zero failures
+   across 100 generations, and none in 100 seeds per grade in the slow suite. The
+   5000-attempt cap is therefore far above the operating range, which is the right
+   side to err on. Extreme is slower than the grade it was measured as before the
+   re-grade — 830 ms median, 1951 ms worst — because rejecting degenerate arithmetic
+   costs the fill extra draws. Figures and the decisions that dominated them are in
    `.learnings/generation-measurements.md`.
 5. **A uniqueness check carries a node budget**, because checking is exponential in
    the blank count. Exceeding it answers "not provably unique" rather than guessing,
@@ -765,9 +823,14 @@ Difficulty rotates by UTC weekday:
 | Tuesday | Easy |
 | Wednesday | Medium |
 | Thursday | Medium |
-| Friday | Medium |
+| Friday | Hard |
 | Saturday | Hard |
-| Sunday | Hard |
+| Sunday | Extreme |
+
+Four grades over seven days, with the week starting gently: two deducible days, two
+more, two that permit guessing, and Extreme once. Sunday holds the hardest so that
+the day a player is most likely to have time for it is the day it appears, and so
+that the grade most likely to break a streak can only do so once a week.
 
 Adjacent dates must not produce adjacent seeds, or consecutive days would give
 visibly similar puzzles. Use an avalanche step, as the sibling's `dailySeed` does.
@@ -1686,7 +1749,7 @@ Rules:
 
 ### 10.4 `slow.yml` — nightly, on tags, and on demand
 
-The slow suite runs 100 seeds per difficulty across three difficulties. Per the
+The slow suite runs 100 seeds per difficulty across four difficulties. Per the
 sibling's cost model in section 5.6, that is potentially minutes of compute, and it
 grows with any generator regression. Running it on every pull request would tax every
 push for a signal that changes rarely.
@@ -1911,6 +1974,9 @@ Each milestone ends with tests passing in CI.
   operators masked, 16 of 39 digits masked, 34 cells carrying grouping cues, and the
   entry pad swapping between digits and operators as focus moves.
 
+  Recorded as it stood. The grade called Hard here is the one now called Extreme, and
+  there were three grades rather than four — see section 14.3.
+
   Generation itself, negative values, division and operator masking all landed at
   M2, and Hard's masking percentages were settled there by measurement rather than
   deferred to here. What remained for M4 was exposing the difficulties in the UI.
@@ -2017,6 +2083,44 @@ grouping cue go with them.
 
 That is three engine files and one CSS token. Writing this down converts a
 frightening-sounding failure into a costed one.
+
+### 14.3 After the first deploy
+
+Everything above was written before anyone had played the game on a real device. The
+first Pages deploy produced a run of reports within an hour, and they are recorded
+here because the pattern in them matters more than the individual fixes: **every one
+was invisible to a green test suite, and most were invisible to reading the code.**
+
+- **Elapsed time was discarded on leaving a board.** Three seconds of play, the menu,
+  then continue, and the clock read `0:00`. Two gaps concealing each other: the total
+  was persisted only when a cell changed, and the clock was not paused on leaving the
+  board. Section 7.3.
+- **"How to play" was blank on every visit after the first.** The card is shown by
+  `showScreen` now. The test asserted which screen was showing and nothing about its
+  contents, so it passed throughout. Section 8.9.
+- **The board jumped and resized when switching between a digit and an operator
+  cell.** Measured at 76.8 px of movement and a 20% resize on an 844x390 board.
+  Section 8.2.
+- **Playable number cells were drawn the same colour as playable operator cells.**
+  One token was doing two jobs. Section 8.5.
+- **The difficulty ladder was wrong in kind, not degree.** Section 2.7.
+- **Zero appeared in far too many single-digit answers.** Section 2.7.1.
+
+Two lessons generalise beyond this project.
+
+**A green suite is evidence about the questions you thought to ask.** Four of the six
+had tests covering the exact feature, passing, asserting one question short of what a
+player would notice: that navigation happened rather than that the screen had
+contents; that a screen was reachable rather than that its clock was recorded. The
+useful prompt when writing an assertion is *what would still pass if this rendered
+nothing at all?*
+
+**Measure the thing the player described.** "The board jumps around" became two
+numbers and three compounding causes by reading `getBoundingClientRect()` before and
+after the interaction. "Medium feels like Hard" became 0 of 30 boards solvable by
+deduction. In both cases the measurement identified a cause that reading the code had
+not suggested, and in the difficulty case it disproved the fix that looked obvious —
+tuning the ratios, which measurement showed does nothing on its own.
 
 ## 15. Risks
 
