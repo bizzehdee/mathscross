@@ -51,14 +51,11 @@ export function createBoardView(state: GameState, callbacks: BoardCallbacks): Bo
   for (const group of numberGroups(state)) {
     for (const cell of group.cells) {
       const index = group.position.get(cell) ?? 0
+      // No 'only' case: numberGroups() returns runs of two or more, because a
+      // single cell has nothing to be joined to. The cue this drives is the
+      // squared-off corners, and a lone digit wants its corners left alone.
       const place =
-        group.cells.length === 1
-          ? 'only'
-          : index === 0
-            ? 'start'
-            : index === group.cells.length - 1
-              ? 'end'
-              : 'middle'
+        index === 0 ? 'start' : index === group.cells.length - 1 ? 'end' : 'middle'
       const held = groupPositions.get(cell)
       if (held === undefined) {
         groupPositions.set(cell, [place])

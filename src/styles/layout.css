@@ -258,8 +258,14 @@ body {
   font-weight: 600;
 }
 
+/* Presses move the ring, they do not repaint the cell.
+
+   This set the background to the number tint, which after the change above would
+   mean pressing an operator cell made it look like a digit cell for as long as the
+   finger was down. The ring is also the clearer signal: it survives whatever
+   background the cell has. */
 .cell[data-editable='true']:active {
-  background: var(--colour-group);
+  box-shadow: inset 0 0 0 2px var(--colour-accent);
 }
 
 .cell:focus-visible {
@@ -268,17 +274,29 @@ body {
   z-index: 1;
 }
 
-/* Grouping cue for multi-cell numbers. Plan section 8.5.
+/* Digit cells carry the number tint; operator and equals cells do not.
 
-   A tinted background plus squared-off inner corners, so the digits of one number
-   read as a single joined block. Without it a player cannot tell 1 5 from two
-   separate operands, which is the misreading most likely to make correct answers
-   look rejected. */
+   Keyed on the kind, not on the grouping. It was keyed on [data-group] until a
+   player reported playable number cells drawn the same colour as playable operator
+   cells, which was exactly right: numberGroups() skips single-cell numbers,
+   because there is nothing to join, so a number that occupies one cell got no
+   attribute and fell through to the plain cell colour -- the colour an operator
+   cell already had. One token was doing two jobs, "these cells are one number" and
+   "this is a digit", and the second job was an accident.
 
-.cell[data-group] {
+   Nothing is lost by moving it. Two numbers can never be adjacent along a line:
+   a number is a maximal run of adjacent digit cells, so a boundary between two
+   numbers is always an operator or an equals. The tint therefore never
+   distinguished one number from the next -- the squared-off corners below do
+   that, and they still do. Measured on a 9x9: five cells changed colour, which
+   were the five being reported. */
+
+.cell[data-kind='digit'] {
   background: var(--colour-group);
 }
 
+/* Squared inner corners, so a run of digits reads as one box and a lone digit
+   reads as an island. This is now the whole of the grouping cue. */
 .cell[data-group~='start'] {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;

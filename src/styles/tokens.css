@@ -62,13 +62,10 @@
     --colour-line-strong: #8b8f98;
     /* 7.39:1 on the raised surface. */
     --colour-accent: #8fb0f0;
-    --colour-group: #2a3242;
     /* Darker than the playable cells, not lighter: the sense of "solid, inert"
        has to survive the inversion, and a light block on a dark board would read
        as the playable one. Not pitch black, for the same reason the light palette
        is not slate. */
-    /* The blocks. Darker than the cells below, so the crossword's sense of
-       "solid, inert" survives the inversion. */
     --colour-block: #0e1014;
     /* Clearly lighter than the page and much lighter than a block.
 
