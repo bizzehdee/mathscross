@@ -1335,6 +1335,35 @@ replacing it, because seeing the puzzle you just solved is part of the moment.
 A daily is the exception: there is one per day, so there is no "another" to offer.
 That case reports the streak instead, which is what a daily is for.
 
+**And confetti.** Decoration, and the only animation in the application beyond the
+one transition section 8.3 permits. Four properties make it safe to add to a game
+that is otherwise deliberately still:
+
+- **CSS animation, not a canvas and a frame loop.** Each piece is a span carrying its
+  own duration, delay and trajectory in custom properties, so the compositor runs the
+  burst and the main thread does nothing after the spawn. It fires on the same frame
+  as the board re-render and the statistics write, which is the busiest frame in the
+  game.
+- **Skipped under `prefers-reduced-motion`, decided in script.** The reduced-motion
+  block in `layout.css` collapses animations to 0.01 ms, which would spawn 44 pieces
+  and flash them out of existence — visible as a blink and pointless work. The
+  spawner checks the query itself and creates nothing, and tolerates an environment
+  with no `matchMedia` rather than taking the dialog down with it.
+- **Invisible to assistive technology and to the pointer.** `aria-hidden` on the
+  container, because 44 empty elements announced after "Congratulations" would bury
+  the announcement that matters, and `pointer-events: none` so it cannot intercept
+  the action a player is reaching for.
+- **A burst cannot outlive its dialog.** The spawner returns a disposer, the dialog
+  holds it, and both `hide` and the next `show` call it. Otherwise dismissing the
+  dialog and finishing another puzzle inside the burst's two seconds would leave the
+  first burst falling over the second, and a dismissed dialog would keep animating
+  behind the board it no longer covers. Removal is on a timer rather than
+  `animationend`, which never fires if the tab is hidden mid-burst.
+
+No dependency. A confetti library costs a few kilobytes against a 40 KiB budget for
+the whole application, for an effect that is thirty lines of CSS. Measured: the
+bundle went from 18.5 to 18.9 KiB and the stylesheet from 2.2 to 2.4 KiB.
+
 ## 9. Cordova and Android
 
 ### 9.1 Cordova or Capacitor

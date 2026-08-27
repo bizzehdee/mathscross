@@ -14,6 +14,7 @@
  */
 import type { Difficulty } from '../../engine/difficulty'
 import { formatElapsed } from '../../game/timer'
+import { burstConfetti } from './confetti'
 
 export interface CompletionView {
   readonly element: HTMLElement
@@ -91,10 +92,29 @@ export function createCompletionView(callbacks: CompletionCallbacks): Completion
     }
   })
 
+  /**
+   * Removes the burst currently running, if any.
+   *
+   * Held rather than fired and forgotten. A player who dismisses the dialog and
+   * finishes another puzzle inside the burst's two seconds would otherwise have the
+   * first burst's pieces falling over the second dialog, and a dismissed dialog
+   * would keep animating behind the board it no longer covers.
+   */
+  let clearConfetti: (() => void) | null = null
+
+  function stopConfetti(): void {
+    clearConfetti?.()
+    clearConfetti = null
+  }
+
   function show(title: string, text: string): void {
     heading.textContent = title
     detail.textContent = text
     element.hidden = false
+    // After unhiding: the pieces are positioned against this element, and a
+    // hidden host has no box to position them in.
+    stopConfetti()
+    clearConfetti = burstConfetti(element)
     // Focus the primary action, so a keyboard or screen reader user lands on the
     // thing they most likely want rather than having to hunt for it.
     ;(another.hidden ? menu : another).focus()
@@ -124,6 +144,7 @@ export function createCompletionView(callbacks: CompletionCallbacks): Completion
       )
     },
     hide(): void {
+      stopConfetti()
       element.hidden = true
     },
     get visible(): boolean {

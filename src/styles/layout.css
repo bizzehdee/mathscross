@@ -637,3 +637,51 @@ body {
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* Confetti, for the completion dialog. Plan section 8.9.
+
+   Purely decorative: no pointer events, hidden from assistive technology by the
+   attribute the spawner sets, and skipped entirely when the player has asked for
+   reduced motion — that decision is made in script rather than here, because the
+   reduced-motion block above would otherwise spawn forty-four pieces and flash
+   them out of existence in 0.01ms.
+
+   Composited: only transform and opacity animate, so the burst costs the main
+   thread nothing after the elements exist. It fires on the same frame as the
+   board re-render and the stats write, which is the busiest frame in the game. */
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti__piece {
+  position: absolute;
+  top: -5vh;
+  left: var(--x);
+  width: var(--piece-width);
+  height: var(--piece-height);
+  background: var(--piece-colour);
+  border-radius: 1px;
+  /* Hidden until its delay elapses. `forwards` alone would leave a piece sitting
+     visible at the top of the screen until its turn came. */
+  opacity: 0;
+  animation: confetti-fall var(--duration) var(--delay) cubic-bezier(0.3, 0.1, 0.7, 1) forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  /* Fades only at the end, so the fall is watched rather than the fade. */
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rot));
+  }
+}
