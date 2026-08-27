@@ -1772,6 +1772,14 @@ Rules:
 - Read the sibling's `play-app-signing.md` before touching the signing secrets.
   "Releases are signed by Google Play" does not remove the need for an upload key,
   and the APK CI builds is not the one users get.
+- **One upload key per app.** Do not reuse the sibling's. Signing several apps with
+  one key is legal on Play — an app is identified by its package name — so this is a
+  blast-radius decision, and what settles it is that these secrets are
+  per-repository. A shared key would have to be pasted into every publishing
+  repository anyway, so it saves no setup work; it only means compromising either
+  repository compromises both apps, and rotating the key forces a separate upload
+  key reset for each. The usual argument for sharing is fear of losing a key, and an
+  upload key is resettable.
 - The first Play upload must be manual. Google requires it, and a personal developer
   account may need a 14-day closed test before production access is granted. Set the
   `PLAY_TRACK` variable to `internal` in the meantime.
@@ -2200,13 +2208,16 @@ and recorded in the section named below.
 | Value ranges | Derived from equation length; original figures unreachable and accepted | 2.6 |
 | Kids tier | Deferred to release 2 | 1.5, 17 |
 | Easy grid size | 5 x 5, and the entry point | 2.7 |
-| Hard operator masking | 100% is provisional, to be settled at M0.5 and M4 | 2.7 |
-| Negative values by difficulty | Off at Easy, on at Medium and Hard | 2.7 |
+| Extreme operator masking | 100%, measured and reached, once operators mask first | 2.7 |
+| Negative values by difficulty | Off at Easy and Medium, on at Hard and Extreme | 2.7 |
+| Difficulty grades | Four. Easy, Medium, Hard, Extreme | 2.7 |
+| Guess-free guarantee | Enforced at Easy and Medium, per masked cell | 2.7 |
+| Degenerate arithmetic | Identities and annihilators rejected at every grade | 2.7.1 |
 | Undo | In scope. 200 moves, single-cell, persisted | 8.6 |
 | Mistake counting | Out of scope. Not definable for this mechanic | 1.5 |
 | Pencil marks | Out of scope; `--colour-note` deleted | 1.5, 8.1 |
 | Onboarding | First-run explainer for multi-cell numbers | 8.7 |
-| Animation | One reduced-motion-gated completion transition, nothing else | 8.3 |
+| Animation | The completion transition and the confetti burst, both reduced-motion-gated. Nothing else | 8.3, 8.9 |
 | Accessibility timing | Pulled forward from M7 into M3 | 8.8 |
 | First launch | Bundled starter puzzle plus background pre-generation | 5.8 |
 | Storage API | `localStorage`, one JSON value per key | 7.2 |
@@ -2225,6 +2236,8 @@ and recorded in the section named below.
 | Data Safety | No data collected, no data shared. Provable via the absent permission | 9.6 |
 | Daily difficulty | Rotates by UTC day of week | 5.7 |
 | Documentation | `README.md` and `.learnings/`. No `docs/` | 3.2 |
+| Upload keystore | One per app, never shared with the sibling | 10.3 |
+| Completion feedback | Dialog plus a reduced-motion-gated confetti burst | 8.9 |
 
 ### 16.1 Deferred to a measurement
 

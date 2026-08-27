@@ -84,6 +84,13 @@ upload key reset. Losing an **app signing** key would be terminal, which is why 
 two must be different and why the app signing key must never be reused as the upload
 key.
 
+**Use an upload key belonging to this app alone.** Do not reuse the key from another
+app, including the Sudoku sibling. These secrets are per-repository, so a shared key
+would have to be pasted here as well and would save no work — it would only mean
+that compromising either repository compromises both apps, and that rotating the key
+forces an upload key reset for each of them. Reasoning in
+`.learnings/play-app-signing.md`.
+
 ## Publishing
 
 The first upload to Play must be done by hand — Google requires it, and a personal
