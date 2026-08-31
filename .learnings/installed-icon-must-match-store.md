@@ -35,6 +35,12 @@ check that runs before packaging.
   a solid block.
 - Older Android uses the flat `src` icon instead, so both are generated.
 - Paths in `<icon>` are relative to `config.xml`, not to the repository root.
+- cordova-android puts the two adaptive layers in `mipmap-<density>-v26/`, not
+  `mipmap-<density>/`. Only the legacy `ic_launcher.png` goes in the unqualified
+  directory. `getAdaptiveImageResourcePath` in `lib/prepare.js` appends the API-26
+  qualifier; `getImageResourcePath`, used for the legacy icon, does not. The first
+  version of the release-time check compared the wrong paths and failed on a build
+  whose icons were correct.
 
 ## What was done
 

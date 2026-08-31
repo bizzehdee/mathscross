@@ -88,21 +88,36 @@ jobs:
       # mismatch. Cordova copies the files named in config.xml into the platform's
       # mipmap resources, and a typo in a path is only a warning there, so compare
       # the bytes rather than trusting that the copy happened.
+      #
+      # The adaptive layers land in mipmap-<density>-v26, not mipmap-<density>:
+      # cordova-android writes them through getAdaptiveImageResourcePath, which
+      # appends the API-26 qualifier. Only the legacy ic_launcher.png sits in the
+      # unqualified directory.
       - name: Assert the launcher icon is this app's icon
         working-directory: native
         run: |
           RES=platforms/android/app/src/main/res
           for pair in \
             "mipmap-xxxhdpi/ic_launcher.png:res/icon/android/xxxhdpi.png" \
-            "mipmap-xxxhdpi/ic_launcher_foreground.png:res/icon/android/xxxhdpi-foreground.png" \
-            "mipmap-xxxhdpi/ic_launcher_background.png:res/icon/android/xxxhdpi-background.png"; do
+            "mipmap-xxxhdpi-v26/ic_launcher_foreground.png:res/icon/android/xxxhdpi-foreground.png" \
+            "mipmap-xxxhdpi-v26/ic_launcher_background.png:res/icon/android/xxxhdpi-background.png"; do
             built="$RES/${pair%%:*}"
             source="${pair#*:}"
+            if [ ! -f "$built" ]; then
+              echo "$built does not exist. Cordova did not copy $source; check the path in config.xml." >&2
+              ls -R "$RES" | grep -i mipmap >&2 || true
+              exit 1
+            fi
             if ! cmp -s "$built" "$source"; then
               echo "$built is not $source. The app would ship an icon that is not the store icon." >&2
               exit 1
             fi
           done
+          # The adaptive icon is only used if this XML names both layers. Without it
+          # Android falls back to the legacy icon and the layers ship unused.
+          XML=$RES/mipmap-xxxhdpi-v26/ic_launcher.xml
+          grep -q 'ic_launcher_foreground' "$XML" && grep -q 'ic_launcher_background' "$XML" \
+            || { echo "$XML does not reference both adaptive layers." >&2; cat "$XML" >&2; exit 1; }
           echo "Launcher icons match native/res/icon/android."
 
       # Signing material is optional so that a release still produces something

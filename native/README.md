@@ -61,11 +61,12 @@ the omission was found. `.learnings/installed-icon-must-match-store.md` has the
 detail.
 
 Each density has an adaptive pair, `-foreground` and `-background`, which is what
-Android 8+ composites and masks, plus a flat `src` icon for older releases. After a
-build, check what was actually copied:
+Android 8+ composites and masks, plus a flat `src` icon for older releases. The
+adaptive pair lands in `mipmap-<density>-v26/`; only the flat icon is in
+`mipmap-<density>/`. After a build, check what was actually copied:
 
 ```bash
-cmp platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png \
+cmp platforms/android/app/src/main/res/mipmap-xxxhdpi-v26/ic_launcher_foreground.png \
     res/icon/android/xxxhdpi-foreground.png
 ```
 
