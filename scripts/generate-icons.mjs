@@ -21,12 +21,19 @@ const LIGHT = [0xf7, 0xf7, 0xf5]
  * `inset` is the fraction of the canvas left as margin. A maskable icon needs the
  * mark inside the safe zone — Android may crop up to 20% from each edge — so it
  * gets a larger inset and a full-bleed ground.
+ *
+ * `ground` draws the indigo behind the mark. Off for an adaptive icon foreground,
+ * which supplies its own background layer.
  */
-function draw(size, { maskable }) {
+function draw(size, { maskable, ground = true }) {
   const canvas = createCanvas(size, size)
   const inset = maskable ? 0.22 : 0.08
 
-  if (maskable) {
+  if (!ground) {
+    // Left transparent: an Android adaptive foreground is composited over its own
+    // background layer, so drawing the indigo here would hide that layer and the
+    // launcher's parallax would move a solid block instead of the mark.
+  } else if (maskable) {
     // Full bleed, so whatever shape the launcher crops to is filled.
     canvas.fill(INDIGO)
   } else {
@@ -120,3 +127,55 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="i
 `
 writeFileSync(join('public', 'icon.svg'), svg)
 console.log('icon.svg')
+
+// The installed Android launcher icon.
+//
+// Without these the packaged app ships cordova-android's default Cordova mark,
+// which is not the icon on the store listing. Play rejects that mismatch, and it
+// is invisible locally because nothing in the web build uses these files. Adaptive
+// and legacy are both generated: adaptive is what Android 8+ actually shows,
+// legacy is the fallback below it. See ../.learnings/installed-icon-must-match-store.md.
+const NATIVE_OUT = join('native', 'res', 'icon', 'android')
+mkdirSync(NATIVE_OUT, { recursive: true })
+
+// Legacy launcher icon sizes, in dp at each density.
+const LEGACY_DENSITIES = [
+  ['ldpi', 36],
+  ['mdpi', 48],
+  ['hdpi', 72],
+  ['xhdpi', 96],
+  ['xxhdpi', 144],
+  ['xxxhdpi', 192],
+]
+
+// Adaptive layers are 108dp square, of which only the middle 72dp is guaranteed
+// visible. ldpi has no adaptive bucket.
+const ADAPTIVE_DENSITIES = [
+  ['mdpi', 108],
+  ['hdpi', 162],
+  ['xhdpi', 216],
+  ['xxhdpi', 324],
+  ['xxxhdpi', 432],
+]
+
+for (const [density, size] of LEGACY_DENSITIES) {
+  const name = `${density}.png`
+  writeFileSync(join(NATIVE_OUT, name), draw(size, { maskable: false }).toPng())
+  console.log(`native ${name} ${size}x${size}`)
+}
+
+for (const [density, size] of ADAPTIVE_DENSITIES) {
+  const foreground = `${density}-foreground.png`
+  writeFileSync(
+    join(NATIVE_OUT, foreground),
+    draw(size, { maskable: true, ground: false }).toPng(),
+  )
+  console.log(`native ${foreground} ${size}x${size}`)
+
+  // A flat colour, as a file rather than a colour reference, so the layer is one
+  // less thing that has to survive Cordova's resource generation.
+  const background = createCanvas(size, size)
+  background.fill(INDIGO)
+  writeFileSync(join(NATIVE_OUT, `${density}-background.png`), background.toPng())
+  console.log(`native ${density}-background.png ${size}x${size}`)
+}

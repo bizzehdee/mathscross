@@ -84,6 +84,27 @@ jobs:
           echo "No INTERNET permission. Permissions declared:"
           grep -n 'uses-permission' "$MANIFEST" || echo "  (none)"
 
+      # The installed icon must be the one on the store listing; Play rejects a
+      # mismatch. Cordova copies the files named in config.xml into the platform's
+      # mipmap resources, and a typo in a path is only a warning there, so compare
+      # the bytes rather than trusting that the copy happened.
+      - name: Assert the launcher icon is this app's icon
+        working-directory: native
+        run: |
+          RES=platforms/android/app/src/main/res
+          for pair in \
+            "mipmap-xxxhdpi/ic_launcher.png:res/icon/android/xxxhdpi.png" \
+            "mipmap-xxxhdpi/ic_launcher_foreground.png:res/icon/android/xxxhdpi-foreground.png" \
+            "mipmap-xxxhdpi/ic_launcher_background.png:res/icon/android/xxxhdpi-background.png"; do
+            built="$RES/${pair%%:*}"
+            source="${pair#*:}"
+            if ! cmp -s "$built" "$source"; then
+              echo "$built is not $source. The app would ship an icon that is not the store icon." >&2
+              exit 1
+            fi
+          done
+          echo "Launcher icons match native/res/icon/android."
+
       # Signing material is optional so that a release still produces something
       # inspectable before a keystore exists. An unsigned build cannot go to Play;
       # see native/README.md for the secrets to set.

@@ -78,6 +78,11 @@ true on one machine only. See
   step on a secret lifted into its own `env` reads false forever and the release
   goes green while publishing nothing. Read before gating any step on a secret, or
   when a release succeeds but the store version does not change.
+- [installed-icon-must-match-store.md](installed-icon-must-match-store.md) — Play
+  rejects an app whose installed launcher icon is not the listing icon, and a Cordova
+  shell with no `<icon>` elements ships the default Cordova mark while every local
+  check passes. Read before adding any asset only the packaged app consumes, or
+  before changing the icon generator.
 - [play-app-signing.md](play-app-signing.md) — "Releases are signed by Google Play"
   does not remove the need for an upload key, the console hands back certificates
   rather than private keys, and the APK CI builds is not the one users get. Read

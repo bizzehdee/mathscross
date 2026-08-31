@@ -49,6 +49,29 @@ Check it after a build:
 grep -c INTERNET platforms/android/app/src/main/AndroidManifest.xml   # expect 0
 ```
 
+## The launcher icon
+
+`config.xml` names the icons in `res/icon/android/`, which `npm run icons` in the
+repository root generates from the same drawing as the web and store icons. They are
+committed.
+
+They are not optional. With no `<icon>` elements Cordova ships its own default mark,
+the store listing shows this app's icon, and Play rejects the mismatch — which is how
+the omission was found. `.learnings/installed-icon-must-match-store.md` has the
+detail.
+
+Each density has an adaptive pair, `-foreground` and `-background`, which is what
+Android 8+ composites and masks, plus a flat `src` icon for older releases. After a
+build, check what was actually copied:
+
+```bash
+cmp platforms/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png \
+    res/icon/android/xxxhdpi-foreground.png
+```
+
+`release.yml` runs that comparison, because a bad path in `config.xml` is only a
+warning to Cordova.
+
 ## Signing
 
 Release builds are signed with an **upload key**, which is yours. Google holds a
@@ -113,5 +136,6 @@ release, check on a device:
   preferences in `config.xml` are what make that work, and the failure is silent
   (see `../.learnings/native-shell-origin.md`);
 - the manifest has no INTERNET permission;
+- the launcher icon on the home screen is this app's mark, not Cordova's;
 - rotation does not reload the WebView or lose an in-progress board;
 - a tap on a board cell registers with no perceptible delay.

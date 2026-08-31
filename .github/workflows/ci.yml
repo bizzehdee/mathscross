@@ -31,6 +31,18 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # The installed launcher icon, the web icons and the store icon are all
+      # drawn by this one script, and all three are committed. Regenerating and
+      # diffing is what stops the committed files drifting from the drawing —
+      # a store icon that no longer matches the installed one is a Play
+      # rejection, and nothing else in the build looks at these files.
+      - name: Icons are up to date
+        run: |
+          npm run icons
+          npm run store:assets
+          git diff --exit-code -- public/icons public/icon.svg store native/res \
+            || { echo "Committed icons differ from the generator. Run 'npm run icons && npm run store:assets' and commit the result." >&2; exit 1; }
+
       - name: Build
         run: npm run build
 
