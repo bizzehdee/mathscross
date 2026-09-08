@@ -89,6 +89,13 @@ export function operatorFromAscii(text: string): Operator | null {
  * -1 rather than 0, because 0 is a legitimate digit. Held in an `Int8Array`,
  * so the sentinel has to be in range.
  */
+/** Cell widths of an equation's two operands and its result. Plan section 2.6. */
+export interface Widths {
+  readonly left: number
+  readonly right: number
+  readonly result: number
+}
+
 export const EMPTY = -1
 
 /**

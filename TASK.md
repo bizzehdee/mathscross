@@ -7,8 +7,8 @@ sections 2.7, 2.9, 5.1, 8.1, 8.2 and 14. Milestones M0 to M7 are recorded in
 Work them in order. Each one leaves the suite green and the app playable.
 
 - [x] TASK-001: Remove the Extreme difficulty
-- [ ] TASK-002: Add the fixed layout table
-- [ ] TASK-003: Phase 1 reads a layout instead of searching for a mesh
+- [x] TASK-002: Add the fixed layout table
+- [x] TASK-003: Phase 1 reads a layout instead of searching for a mesh
 - [ ] TASK-004: Fill and mask across mixed equation lengths
 - [ ] TASK-005: Re-measure Hard and reset its mask targets
 - [ ] TASK-006: Render an 11 x 11 board on a phone
@@ -43,6 +43,10 @@ test loads a stats and a board payload naming `extreme` and shows the app recove
 ## TASK-002: Add the fixed layout table
 
 Required by: TASK-003
+
+Landed with TASK-003 in one commit. An 11-cell line cannot be fed by a 7 x 7 grade's
+value range, so the layout table and the difficulty parameters cannot land
+separately without leaving Hard unable to generate.
 
 `src/engine/layouts.ts`, holding the three grids of `plan.md` section 2.9 as data,
 their equation lists, and the feasible width triples from section 2.6. Nothing

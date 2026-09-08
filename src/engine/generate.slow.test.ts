@@ -12,9 +12,9 @@ import { CellKind } from './types'
 /**
  * 100 seeds per difficulty, per plan section 13.4.
  *
- * Runs nightly, on tags, and on demand — never on a pull request. Extreme needs a
- * median of about 1.1 s per puzzle, so this suite is minutes of compute for a
- * signal that changes rarely. Plan section 10.4.
+ * Runs nightly, on tags, and on demand — never on a pull request. Hard is seconds
+ * per puzzle on an 11 x 11, so this suite is minutes of compute for a signal that
+ * changes rarely. Plan section 10.4.
  */
 const SEED_COUNT = 100
 
@@ -132,12 +132,11 @@ for (const difficulty of ALL_DIFFICULTIES) {
 describe('mesh structure over many seeds', () => {
   it('never produces a structurally invalid mesh', () => {
     for (const difficulty of ALL_DIFFICULTIES) {
-      const parameters = parametersFor(difficulty)
       for (let seed = 1; seed <= SEED_COUNT; seed += 1) {
         const mesh = buildMesh({ difficulty, rng: createRng(seed) })
         expect(mesh, `${difficulty} seed ${seed}`).not.toBeNull()
         if (mesh !== null) {
-          expect(meshProblems(mesh, parameters), `${difficulty} seed ${seed}`).toEqual([])
+          expect(meshProblems(mesh), `${difficulty} seed ${seed}`).toEqual([])
         }
       }
     }

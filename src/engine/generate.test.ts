@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { ALL_DIFFICULTIES, Difficulty, parametersFor, valueInRange } from './difficulty'
 import { boardState, readNumber } from './evaluate'
 import { generate } from './generate'
-import { candidatePatterns, buildMesh, meshProblems, nonAdjacentSubsets } from './mesh'
+import { buildMesh, meshProblems } from './mesh'
+import { layoutFor, widthOptions } from './layouts'
 import { densityWithinTolerance } from './mask'
 import { isDegenerateOperation, knownValue } from './numbers'
 import { binaryShape, parseGrid } from './parse'
@@ -161,23 +162,23 @@ describe('arithmetic worth asking', () => {
 })
 
 describe('the mesh', () => {
-  it('offers at least one pattern per difficulty', () => {
+  it('offers a width triple for every equation on every layout', () => {
     for (const difficulty of ALL_DIFFICULTIES) {
-      const patterns = candidatePatterns(parametersFor(difficulty))
-      expect(patterns.length, difficulty).toBeGreaterThan(0)
-      for (const pattern of patterns) {
-        expect(pattern.length, difficulty).toBe(parametersFor(difficulty).size)
+      for (const equation of layoutFor(difficulty).equations) {
+        expect(
+          widthOptions(equation.length, difficulty).length,
+          `${difficulty} ${equation.length} cells`,
+        ).toBeGreaterThan(0)
       }
     }
   })
 
   it('builds a structurally valid mesh for every difficulty and seed', () => {
     for (const difficulty of ALL_DIFFICULTIES) {
-      const parameters = parametersFor(difficulty)
       for (const seed of SEEDS) {
         const mesh = buildMesh({ difficulty, rng: createRng(seed) })
         expect(mesh, `${difficulty} seed ${seed}`).not.toBeNull()
-        expect(meshProblems(mesh!, parameters), `${difficulty} seed ${seed}`).toEqual([])
+        expect(meshProblems(mesh!), `${difficulty} seed ${seed}`).toEqual([])
       }
     }
   })
@@ -191,11 +192,19 @@ describe('the mesh', () => {
     }
   })
 
-  it('never places two equations in adjacent lines', () => {
-    const subsets = nonAdjacentSubsets([0, 1, 2, 3, 4], 2)
+  it('paints the same board the layout draws', () => {
+    // The picture is what a person edits and the paint is what the game plays, so
+    // they have to agree cell for cell. `meshProblems` says so above; this says it
+    // of the drawn grid rather than of the equation list.
+    const mesh = buildMesh({ difficulty: Difficulty.Hard, rng: createRng(1) })
+    const layout = layoutFor(Difficulty.Hard)
 
-    expect(subsets).toContainEqual([0, 2])
-    expect(subsets).not.toContainEqual([0, 1])
+    for (let row = 0; row < layout.size; row += 1) {
+      const painted = [...Array(layout.size).keys()]
+        .map((column) => (mesh?.grid.kinds[row * layout.size + column] === CellKind.Block ? '#' : '.'))
+        .join('')
+      expect(painted, `row ${row}`).toBe(layout.rows[row])
+    }
   })
 })
 

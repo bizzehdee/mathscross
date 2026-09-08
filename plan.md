@@ -331,11 +331,11 @@ across the generator, the solver, and the UI.
 |---|---|---|---|
 | Grid dimensions | 5 x 5 | 7 x 7 | 11 x 11 |
 | Layout | fixed, section 2.9 | fixed, section 2.9 | fixed, section 2.9 |
-| Equations per board | 6 | 6 | 18 |
+| Equations per board | 6 | 6 | 14 |
 | Equation length | 5 cells | 7 cells | 5 and 11 cells |
 | Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` |
 | Derived value range | 0 to 9 | 0 to 99 | 0 to 999 |
-| Intersection count | 9 | 9 | 36 |
+| Intersection count | 9 | 9 | 24 |
 | Division | not used | not used | not used |
 | `allowNegative` | false | false | true, and inert |
 | Digit masking | 40% | 35% | re-measure at M8; was 50% at 7 x 7 |
@@ -405,7 +405,7 @@ Notes on this table:
   measured on. Section 5.4 step 1.
 - **Hard's two mask ratios are unknown until M8 re-measures them.** The 50% and 30%
   in the old table were measured on a 7 x 7 Hard with seven equations. The new Hard
-  has 18 equations, 36 intersections and three-digit operands, and nothing carries
+  has 14 equations, 24 intersections and three-digit operands, and nothing carries
   over: an intersection cell is harder to mask and a three-digit number is three
   variables. Set both targets from measurement, as M2 did, and do not carry the old
   figures forward as if they were still evidence.
@@ -516,35 +516,55 @@ count, same intersection count, same guarantee of a guess-free route.
 
 ```
 .....#.....
-.#.#.#.#.#.
+.#.#####.#.
 ...........
-.#.#.#.#.#.
+.#.#####.#.
 .....#.....
 .#.#####.#.
 .....#.....
-.#.#.#.#.#.
+.#.#####.#.
 ...........
-.#.#.#.#.#.
+.#.#####.#.
 .....#.....
 ```
 
-Eighteen equations: twelve of 5 cells at `(1, 1, 1)`, and six of 11 cells at
-`(3, 3, 3)` — rows 2 and 8, and columns 0, 2, 8 and 10. Thirty-six intersections.
+Fourteen equations: eight of 5 cells at `(1, 1, 1)`, and six of 11 cells at
+`(3, 3, 3)` — rows 2 and 8, and columns 0, 2, 8 and 10. Twenty-four intersections.
 
-**The Hard layout as first drawn could not be built, and the reason generalises.**
-It closed rows 2 and 8 at columns 1 and 9, and columns 2 and 8 at rows 1 and 9,
-making those four lines 7 cells rather than 11. A 7-cell equation admits only
-`(1, 2, 2)`, `(2, 1, 2)` and `(2, 2, 1)`, whose operator and equals cells fall at
-offsets `{1, 4}`, `{2, 4}` and `{2, 5}`. Those four lines are crossed at offsets 0,
-2, 4 and 6, and every one of the three triples puts a non-digit at offset 2 or 4. No
-assignment exists, for any seed. Opening the four lines to the full 11 cells is the
-smallest change that fixes it, and it is what the picture above does.
+Columns 4 and 6 are **dotted**: free on the even rows, blocked on the odd ones, so
+they carry no equation of their own, and their cells are covered by the row equations
+passing through them. That is not decoration. It is what makes the board fillable,
+and it is the second of two corrections this layout needed.
 
-The rule worth carrying: **on a lattice whose lines are two apart, a 7-cell equation
-cannot cross at every even offset.** 5-cell and 11-cell equations both can. A future
-layout mixing 7-cell lines into a 2-spaced lattice will fail the same way, and it
-will fail silently at fill time rather than at layout time unless section 13.3
-asserts width consistency on the layouts themselves.
+**Correction one: a 7-cell line cannot cross on even offsets.** As first drawn, rows
+2 and 8 and columns 0, 2, 8 and 10 stopped one cell short at each end, making them 7
+cells. A 7-cell equation admits only `(1, 2, 2)`, `(2, 1, 2)` and `(2, 2, 1)`, whose
+operator and equals cells fall at offsets `{1, 4}`, `{2, 4}` and `{2, 5}`. Those
+lines are crossed at offsets 0, 2, 4 and 6, and every one of the three triples puts a
+non-digit at offset 2 or 4. No width assignment exists, for any seed.
+
+**Correction two: an equation needs a cell of its own.** With all six even columns
+carrying equations, every 5-cell row equation had its three digits — at offsets 0, 2
+and 4 — pinned by three crossing columns. The fill draws two terms and derives the
+third; an equation with no free cell has nothing to draw, so it can only come out
+true by luck, and twelve of them had to come out true at once. Hard exhausted the
+5000-attempt cap on every seed. Dotting columns 4 and 6 gives each 5-cell equation
+one cell no other equation touches.
+
+**The rule underneath both.** On a lattice whose lines sit two apart, a 5-cell
+equation is *entirely* crossings: its digits are at offsets 0, 2 and 4, and every
+even offset meets a line. An 11-cell equation has digits at odd offsets too, so it
+keeps three cells of its own. A 5-cell equation gets one only by not being crossed
+somewhere.
+
+Easy is the exception, and it shows what the rule is really about. All nine of its
+digit cells are crossings, and it still generates in a millisecond, because a board
+of single digits comes out true by luck often enough that retrying is cheap. Luck
+stops being cheap the moment a term has more than ten possible values — which is why
+section 13.3 asserts the rule at Medium and Hard and not at Easy.
+
+Both corrections were found by building the layout rather than by drawing it, and
+both would otherwise have failed at fill time, with a symptom pointing at the fill.
 
 **Why fixed layouts at all.** Three reasons, in the order they matter:
 
@@ -555,7 +575,7 @@ asserts width consistency on the layouts themselves.
    generation, layout scoring and the intersection range that drove it. What is left
    is a table lookup and a width assignment.
 3. Generation cost stops varying with which mesh the search happened to pick. Every
-   Hard board now has the same 18 equations, so the cost distribution has one shape
+   Hard board now has the same 14 equations, so the cost distribution has one shape
    instead of one per layout.
 
 What is given up is board-shape variety, which at Easy and Medium was already almost
@@ -933,7 +953,7 @@ The design that follows:
    1094 ms and 2021 ms, zero failures over 100 generations and 100 slow-suite seeds
    per grade — were measured on the 5 x 5, 7 x 7 and 9 x 9 boards that section 2.9
    replaced. Easy is unchanged. Medium and Hard must be re-measured, and Hard is the
-   one at risk: 18 equations, 36 intersections and six three-digit lines against a
+   one at risk: 14 equations, 24 intersections and six three-digit lines against a
    grade that used to have seven equations on a 7 x 7. Figures and the decisions
    that dominated them are in `.learnings/generation-measurements.md`.
 
@@ -2133,9 +2153,13 @@ And on the layouts themselves, without generating anything, per difficulty:
 - The equations form a single connected component, with no two parallel equations in
   adjacent rows or columns.
 - **Every equation has at least one feasible width triple, and some assignment of
-  triples puts a `digit` cell at every intersection.** This is the check that would
-  have caught the Hard layout in section 2.9 at the point it was drawn, rather than
-  as a fill that fails on every seed.
+  triples puts a `digit` cell at every intersection.**
+- **Every equation has at least one digit cell no other equation touches**, at each
+  difficulty whose values run past a single digit. Easy is exempt, and section 2.9
+  says why.
+
+Those last two are the checks that would have caught the two Hard layouts in section
+2.9 at the point they were drawn, rather than as a fill failing on every seed.
 - The output has exactly one solution.
 - `generate({ seed, difficulty })` called twice returns identical output. This is the
   determinism guard. It must never be skipped or marked flaky.
@@ -2148,7 +2172,7 @@ difficulty. Assert every property in section 13.3, and additionally:
 
 - **Blanks per board never decrease up the ladder.** Easy, then Medium, then Hard.
   This is the assertion that survives a re-measurement of the mask targets, and it is
-  the one that fails if Hard's density collapses under 36 intersections.
+  the one that fails if Hard's density collapses under 24 intersections.
 - **The median achieved mask density is within 10 percentage points of target**, for
   both digits and operators, at every difficulty. Asserted on the median rather than
   per puzzle: individual density varies enough that a per-puzzle check fails on about
@@ -2324,7 +2348,9 @@ Each milestone ends with tests passing in CI.
 
   1. `src/engine/layouts.ts` holding the three layouts of section 2.9 and their
      equation lists, the width assignment replacing the mesh search, and the layout
-     assertions in section 13.3.
+     assertions in section 13.3. The difficulty table's sizes and ranges move in the
+     same change: an 11-cell line cannot be fed by a 7 x 7 grade's values, so the
+     layouts and the parameters cannot land separately.
   2. Extreme removed from the difficulty table, the daily rotation, the menu, stats
      and persistence, including whatever a stored settings or stats value from an
      earlier version says. Division and 100% operator masking become unused engine

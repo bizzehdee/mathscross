@@ -92,13 +92,12 @@ export function generate(request: GenerateRequest): GenerateResult {
 
     const mesh = buildMesh({ difficulty, rng })
     if (mesh === null) {
-      // No width triple fits the grid size, or no layout reaches the
-      // intersection range. A configuration fault, not bad luck: retrying with
-      // another seed cannot help.
+      // The layout admits no width assignment. A configuration fault, not bad
+      // luck: retrying with another seed cannot help. Plan section 2.9.
       return { ok: false, reason: 'no-mesh', attempts: attempt }
     }
 
-    const structural = meshProblems(mesh, parameters)
+    const structural = meshProblems(mesh)
     if (structural.length > 0) {
       // The mesh builder is meant to satisfy these by construction, so this is a
       // defect rather than a rejection. Checked anyway, because it is cheap and

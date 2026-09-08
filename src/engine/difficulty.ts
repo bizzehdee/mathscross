@@ -33,11 +33,13 @@ export function isDifficulty(value: unknown): value is Difficulty {
 }
 
 export interface DifficultyParameters {
-  /** Grid side length. Grids are always square. */
+  /**
+   * Grid side length. Grids are always square.
+   *
+   * Read off the layout in `layouts.ts` rather than chosen: the picture is the
+   * authority and `layouts.test.ts` asserts the two agree. Plan section 2.9.
+   */
   readonly size: number
-  /** Inclusive bounds on the cell length of one equation. */
-  readonly minEquationLength: number
-  readonly maxEquationLength: number
   readonly operators: readonly Operator[]
   /**
    * Inclusive bounds on any operand or result.
@@ -49,10 +51,15 @@ export interface DifficultyParameters {
    */
   readonly minValue: number
   readonly maxValue: number
-  /** Inclusive bounds on the number of cells shared by two equations. */
-  readonly minIntersections: number
-  readonly maxIntersections: number
-  /** Whether an operand or result may be negative. */
+  /**
+   * Whether an operand or result may be negative.
+   *
+   * Inert, at every difficulty. No layout places a sign cell, so no result can be
+   * written negative, and an equation is exactly `A op B = C` with one operator, so
+   * there is no intermediate to be negative either. Kept because the parser,
+   * evaluator and solver all handle sign cells already and a layout may declare one
+   * later. Plan sections 2.9 and 17.
+   */
   readonly allowNegative: boolean
   /** Target proportion of digit cells to mask. A target, never a guarantee. */
   readonly digitMaskRatio: number
@@ -82,13 +89,9 @@ export interface DifficultyParameters {
 
 const EASY: DifficultyParameters = {
   size: 5,
-  minEquationLength: 5,
-  maxEquationLength: 5,
   operators: [Operator.Plus, Operator.Minus],
   minValue: 0,
   maxValue: 9,
-  minIntersections: 2,
-  maxIntersections: 4,
   allowNegative: false,
   digitMaskRatio: 0.4,
   operatorMaskRatio: 0,
@@ -110,15 +113,9 @@ const EASY: DifficultyParameters = {
  */
 const MEDIUM: DifficultyParameters = {
   size: 7,
-  minEquationLength: 5,
-  maxEquationLength: 7,
   operators: [Operator.Plus, Operator.Minus, Operator.Times],
-  // Positive only. A negative intermediate value is the single largest step in
-  // difficulty for this age group, and it is Hard's to introduce.
   minValue: 0,
   maxValue: 99,
-  minIntersections: 5,
-  maxIntersections: 8,
   allowNegative: false,
   // Lower than Hard's, and lower than the old Medium's 0.5. Deducibility is what
   // sets this: every cell masked is a cell propagation has to reach, and the
@@ -139,18 +136,17 @@ const MEDIUM: DifficultyParameters = {
  * guaranteed to be reachable without trying something.
  */
 const HARD: DifficultyParameters = {
-  size: 7,
-  minEquationLength: 5,
-  maxEquationLength: 7,
+  size: 11,
   operators: [Operator.Plus, Operator.Minus, Operator.Times],
-  minValue: -99,
-  maxValue: 99,
-  minIntersections: 5,
-  maxIntersections: 8,
+  // Three digits, because the layout carries 11-cell lines and `ddd op ddd = ddd`
+  // is the only shape one admits. Derived from the picture, not chosen.
+  minValue: -999,
+  maxValue: 999,
   allowNegative: true,
-  // 0.50, not the 0.60 the plan first specified. M0.5 predicted this from a
-  // hand-built board that could only reach 0.42, and M2 measured 0.53 achieved
-  // against a 0.60 target across 60 seeds. Set to what uniqueness allows.
+  // Measured on the old 7 x 7 Hard, which had seven equations. The new one has 14
+  // equations and 24 intersections, and neither figure carries over: an
+  // intersection cell is harder to mask and a three-digit number is three
+  // variables. TASK-005 re-measures both and resets them.
   digitMaskRatio: 0.5,
   operatorMaskRatio: 0.3,
   requireDeducible: false,

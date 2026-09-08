@@ -120,18 +120,21 @@ function fillEquation(
     ? [operatorHeld as Operator]
     : rng.shuffle([...operators])
 
-  // Derive the *widest* term and draw the other two.
+  // Derive the term with the most room, and draw the other two.
   //
-  // Always deriving the result looks natural and is badly wrong when the result
-  // is narrower than the operands. At Hard the mesh offers patterns such as
-  // `ddd op ddd = d`, where two random three-digit operands land on a one-digit
-  // result about 1% of the time — and every one of Hard's seven equations has to
-  // succeed at once, so the fill never completed at all.
+  // Room means free cells first and width second, in that order. Width alone was
+  // the original rule, and it read well until the layouts arrived: an equation
+  // reached late in the fill has some of its digits already written by the
+  // equations it crosses, and deriving a term whose every digit is fixed means the
+  // derived value has to match all of them — one draw in a thousand at three
+  // digits. Counting free cells first points the derivation at the part of the
+  // equation that is still free to move.
   //
-  // The widest term has the most room to absorb whatever the others produce.
-  // For that same pattern, drawing `c` in 0..9 and `b` in 100..999 and deriving
-  // `a = c + b` succeeds almost every draw.
-  const target = widestTerm(shape)
+  // Width still breaks the tie, and for the reason it was chosen: always deriving
+  // the result is badly wrong when the result is narrower than the operands.
+  // `ddd op ddd = d` lands on a valid one-digit result about 1% of the time, so the
+  // fill never completed. The widest term has the most room to absorb the others.
+  const target = freestTerm(shape, grid)
 
   for (const operator of candidateOperators) {
     for (let draw = 0; draw < draws; draw += 1) {
@@ -187,21 +190,33 @@ function termOf(shape: BinaryShape, name: TermName): NumberToken {
   return shape.result
 }
 
-/** The term with the most cells. Ties prefer the result, then the left operand. */
-function widestTerm(shape: BinaryShape): TermName {
-  const widths: readonly [TermName, number][] = [
-    ['c', shape.result.cells.length],
-    ['a', shape.left.cells.length],
-    ['b', shape.right.cells.length],
+/**
+ * The term with the most cells still empty, widest first on a tie.
+ *
+ * Ties otherwise prefer the result, then the left operand, so the choice is fixed
+ * rather than incidental.
+ */
+function freestTerm(shape: BinaryShape, grid: Grid): TermName {
+  const terms: readonly [TermName, NumberToken][] = [
+    ['c', shape.result],
+    ['a', shape.left],
+    ['b', shape.right],
   ]
+
   let best: TermName = 'c'
+  let bestFree = -1
   let bestWidth = -1
-  for (const [name, width] of widths) {
-    if (width > bestWidth) {
+
+  for (const [name, token] of terms) {
+    const free = token.cells.filter((cell) => grid.values[cell] === EMPTY).length
+    const width = token.cells.length
+    if (free > bestFree || (free === bestFree && width > bestWidth)) {
       best = name
+      bestFree = free
       bestWidth = width
     }
   }
+
   return best
 }
 

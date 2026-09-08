@@ -16,6 +16,11 @@ true on one machine only. See
 
 ## Generation and puzzles
 
+- [a-drawn-layout-must-be-checked-against-the-fill.md](a-drawn-layout-must-be-checked-against-the-fill.md)
+  — two hand-drawn Hard layouts were unbuildable and both looked correct: a 7-cell
+  equation cannot cross at every even offset, an equation with no cell of its own can
+  only come out true by luck, and interval arithmetic calls a width usable when every
+  instance of it is degenerate. Read before drawing or editing a layout.
 - [masking-is-limited-by-weakly-constrained-cells.md](masking-is-limited-by-weakly-constrained-cells.md)
   — a cell only one equation crosses usually cannot be masked without losing
   uniqueness, a hand-built Medium reached 42% against a 60% target, and an operator
