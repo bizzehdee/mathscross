@@ -1257,6 +1257,11 @@ Three rules bind a palette, and a new one has to be checked against all three:
   sit on.
 - Every palette sets `--colour-error` itself. A single hard-coded red fails on a dark
   surface: `#b3261e` is 2.46:1 on the dark theme's cell.
+- **The cell must not be the same colour as the page.** Four values are ordered
+  darkest to lightest in a dark palette and the reverse in a light one: block, page,
+  panel, cell. Football was built with the sibling's page green used for the cell,
+  which put the two a shade apart and made the board read as one flat rectangle. A
+  crossword grid only works when the cells look like paper laid on something.
 
 Two tokens the sibling does not have must be defined in **all nine** palettes, not
 just the first four: `--colour-group` and `--colour-block`, below. A palette that

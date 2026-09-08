@@ -128,7 +128,9 @@ function visibleScreen(root: HTMLElement): string {
 
 function button(root: HTMLElement, label: string): HTMLElement {
   const found = [...root.querySelectorAll<HTMLElement>('button')].find(
-    (element) => element.textContent === label,
+    // Accessible name first: a theme button holds a preview board as well as its
+    // label, so its text content is not its name.
+    (element) => element.getAttribute('aria-label') === label || element.textContent === label,
   )
   if (found === undefined) {
     throw new Error(`No button labelled ${label}`)

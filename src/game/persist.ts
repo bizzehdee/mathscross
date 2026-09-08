@@ -25,6 +25,7 @@ import { isDifficulty, type Difficulty } from '../engine/difficulty'
 import { createGrid } from '../engine/grid'
 import { EMPTY, type Grid } from '../engine/types'
 import { emptyStats, normaliseStats, STATS_STORAGE_KEY, type Stats } from '../features/stats/stats'
+import { isTheme, type ThemeChoice } from '../features/theme/theme'
 import { MAX_HISTORY, type GameState, type Move } from './state'
 
 export const FREE_PLAY_KEY = 'mathscross.game.v1'
@@ -95,7 +96,7 @@ export interface StoredBoard {
 
 export interface Settings {
   readonly v: 1
-  readonly theme: 'system' | 'light' | 'dark' | 'contrast'
+  readonly theme: ThemeChoice
   readonly onboardingDismissed: boolean
 }
 
@@ -218,13 +219,9 @@ export function loadSettings(storage: StorageLike = defaultStorage()): Settings 
     return defaultSettings()
   }
   const stored = raw as Partial<Settings>
-  const theme = stored.theme
   return {
     v: 1,
-    theme:
-      theme === 'light' || theme === 'dark' || theme === 'contrast' || theme === 'system'
-        ? theme
-        : 'system',
+    theme: isTheme(stored.theme) ? stored.theme : 'system',
     onboardingDismissed: stored.onboardingDismissed === true,
   }
 }

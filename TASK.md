@@ -13,7 +13,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-009: Make the uniqueness check stop re-deriving what did not change
 - [x] TASK-005: Re-measure Hard and reset its mask targets
 - [x] TASK-006: Render an 11 x 11 board on a phone
-- [ ] TASK-007: The five named palettes and their previews
+- [x] TASK-007: The five named palettes and their previews
 - [ ] TASK-008: Documentation and store listing
 - [ ] TASK-010: The header takes 86px of a landscape phone
 
@@ -273,6 +273,20 @@ The digit pad is also now two rows of five rather than six and four.
 
 Done when: a test asserts every palette defines every token the board reads, and each
 of the nine renders correctly with a stored preference.
+
+**Done.** Nine themes, each declared once under a selector list naming both the
+applied form and the preview form. Every accent was checked against the cell, the
+group tint and the raised surface on top of it, and every one clears 4.5:1 — the
+figures are in the comment above each palette.
+
+Settings shows a five-cell board fragment per choice, built from the real `.cell`
+classes and attributes so a palette that breaks the board breaks its own preview.
+
+One palette had to be re-cut after looking at it. Football reused the sibling's page
+green for the cell, which left the page and the cells a shade apart and made the
+board read as one flat rectangle of green. The four greens are now ordered block,
+page, panel, cell, and the rule is recorded in plan section 8.1: a cell must not be
+the colour of the page.
 
 ## TASK-008: Documentation and store listing
 

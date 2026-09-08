@@ -584,6 +584,38 @@ body {
   flex-wrap: wrap;
 }
 
+/* A theme choice is a miniature board above its name.
+
+   The preview carries `.board` as well as its own class, so it inherits the board's
+   background and gaps and is painted by the same cell rules the real board uses. A
+   palette that breaks the board therefore breaks its own preview, which is the point
+   of building it this way rather than from swatches. */
+.theme-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.theme-choice__preview {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  width: 7.5rem;
+  aspect-ratio: 5 / 1;
+  /* Overrides the board's own width rule, which is sized for a real board. */
+  container-type: normal;
+}
+
+.theme-choice__preview .cell {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.theme-choice__label {
+  font-size: 0.9rem;
+}
+
 /* Screens. One shows at a time; the router sets `hidden` on the rest. */
 
 .screen {

@@ -52,8 +52,27 @@
   --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* The light palette again, for the two previews that need it spelled out: the light
+   one always, and the system one while the device is in light mode. A preview sits
+   inside a document already painted in some other theme, so it has to set the whole
+   palette rather than inherit it. */
+[data-theme-preview='light'],
+[data-theme-preview='system'] {
+  --colour-surface: #f7f7f5;
+  --colour-surface-raised: #ffffff;
+  --colour-ink: #1a1a18;
+  --colour-ink-muted: #6b6b66;
+  --colour-line: #c9c9c2;
+  --colour-line-strong: #3a3a36;
+  --colour-accent: #3a5fa8;
+  --colour-group: #e4e9f5;
+  --colour-block: #b9c0cc;
+  --colour-cell: #ffffff;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']),
+  [data-theme-preview='system'] {
     --colour-surface: #16171a;
     --colour-surface-raised: #1f2126;
     --colour-ink: #ecece8;
@@ -78,7 +97,8 @@
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+[data-theme-preview='dark'] {
   --colour-surface: #16171a;
   --colour-surface-raised: #1f2126;
   --colour-ink: #ecece8;
@@ -94,7 +114,8 @@
 /* High contrast. Chosen explicitly rather than derived from the dark palette,
    because raising contrast is not the same as inverting one. The accent stays
    the sibling's yellow: it is picked for contrast, not for brand. */
-:root[data-theme='contrast'] {
+:root[data-theme='contrast'],
+[data-theme-preview='contrast'] {
   --colour-surface: #000000;
   --colour-surface-raised: #000000;
   --colour-ink: #ffffff;
@@ -108,4 +129,113 @@
      contrast, and blinding is not the same thing. */
   --colour-block: #d9d9d9;
   --colour-cell: #000000;
+}
+
+/* The five named palettes. Plan section 8.1.
+
+   Taken from the sibling, which added them for children — a stated audience, and one
+   not served by three greys. Each moves the surfaces, the ink, the lines and the
+   accent, and nothing else: the spacing, the type scale and the tap targets are the
+   same in all nine.
+
+   Every palette is declared once, under a selector list naming both the applied form
+   and the preview form the settings screen paints its miniature board with. A second
+   copy of the colours, in TypeScript or in a duplicated rule, would drift.
+
+   Three rules bind a palette and every one of these was checked against all three:
+
+     - `--colour-accent` is body text, not decoration. An entered digit is drawn in
+       it and an active button fills with it, so it needs 4.5:1 against the cell and
+       against the group tint, and the raised surface needs 4.5:1 on top of it.
+     - `--colour-ink` and `--colour-ink-muted` need 4.5:1 on the surface they sit on.
+     - `--colour-block` and `--colour-cell` are MathsCross's own, and the sibling has
+       no equivalent of either. A block must read as solid and inert against the cells
+       a player writes in, in both directions: darker on a light board, darker still
+       on a dark one. */
+
+/* Football: the pitch. Grass, white markings, and gold for what the player writes.
+   A pitch rather than a kit, so it carries no club and no country.
+
+   The four greens are ordered block, page, panel, cell — darkest to lightest, the
+   same order the dark palette uses. The sibling's football page green was reused
+   for the *cell* at first, which put the page and the cells a shade apart and made
+   the board read as one flat rectangle of green. A crossword grid only works if the
+   cells look like paper laid on something. The page is a shade darker than the
+   sibling's for that reason.
+
+   Accent 5.13:1 on the cell and 4.57:1 on the group tint. */
+:root[data-theme='football'],
+[data-theme-preview='football'] {
+  --colour-surface: #0a3a1c;
+  --colour-surface-raised: #0f4f26;
+  --colour-ink: #ffffff;
+  --colour-ink-muted: #c8e6cf;
+  --colour-line: #4f9a6a;
+  --colour-line-strong: #ffffff;
+  --colour-accent: #ffd34d;
+  --colour-group: #1d6b38;
+  --colour-block: #04240f;
+  --colour-cell: #16632f;
+}
+
+/* Space. Accent 8.98:1 on the cell. */
+:root[data-theme='space'],
+[data-theme-preview='space'] {
+  --colour-surface: #0b1026;
+  --colour-surface-raised: #141b3a;
+  --colour-ink: #eef2ff;
+  --colour-ink-muted: #a6b0d9;
+  --colour-line: #33407a;
+  --colour-line-strong: #8fa0e8;
+  --colour-accent: #58e1ff;
+  --colour-group: #2c3b6e;
+  --colour-block: #060a18;
+  --colour-cell: #1e2a55;
+}
+
+/* Sweets. Grape for the accent, not strawberry: a pink accent on a pink surface
+   would sit a shade away from the red a wrong answer is drawn in.
+   Accent 5.95:1 on the cell. */
+:root[data-theme='sweets'],
+[data-theme-preview='sweets'] {
+  --colour-surface: #fff1f6;
+  --colour-surface-raised: #ffffff;
+  --colour-ink: #4a1230;
+  --colour-ink-muted: #8a4a68;
+  --colour-line: #f2b8ce;
+  --colour-line-strong: #b8557f;
+  --colour-accent: #7b2ff2;
+  --colour-group: #fce6ef;
+  --colour-block: #e59ab8;
+  --colour-cell: #ffffff;
+}
+
+/* Jungle. Accent 5.92:1 on the cell. */
+:root[data-theme='jungle'],
+[data-theme-preview='jungle'] {
+  --colour-surface: #f6efdc;
+  --colour-surface-raised: #fffaf0;
+  --colour-ink: #33240f;
+  --colour-ink-muted: #6f5a33;
+  --colour-line: #d8c8a0;
+  --colour-line-strong: #7a6534;
+  --colour-accent: #2a6f2d;
+  --colour-group: #efe6cf;
+  --colour-block: #c9b483;
+  --colour-cell: #fffaf0;
+}
+
+/* Ocean. Accent 5.04:1 on the cell. */
+:root[data-theme='ocean'],
+[data-theme-preview='ocean'] {
+  --colour-surface: #e3f4f8;
+  --colour-surface-raised: #f7fdff;
+  --colour-ink: #0b2b45;
+  --colour-ink-muted: #3f6a86;
+  --colour-line: #a9d3e2;
+  --colour-line-strong: #2c5f7d;
+  --colour-accent: #c2410c;
+  --colour-group: #e8f5fa;
+  --colour-block: #93c2d6;
+  --colour-cell: #f7fdff;
 }
