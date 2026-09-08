@@ -62,6 +62,11 @@ true on one machine only. See
   `https://localhost`, not `file://`, or `localStorage` is not durable and there is
   no secure context. The failure is silent. Read before touching `native/config.xml`
   or the native base path.
+- [deviceready-needs-cordova-js.md](deviceready-needs-cordova-js.md) — Cordova does
+  not inject its runtime, so a page that never loads `cordova.js` waits for a
+  `deviceready` that nobody will fire and mounts nothing; the file exists only in the
+  packaged app, so no local check sees it. Read before making anything wait on the
+  shell, or when the app is blank but the bundle is fine.
 - [https-origin-needs-internet-permission.md](https-origin-needs-internet-permission.md)
   — a webview will not load an `https://localhost` origin without the INTERNET
   permission, so stripping the permission ships an app that opens to a blank screen;

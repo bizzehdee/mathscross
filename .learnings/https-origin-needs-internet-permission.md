@@ -5,6 +5,19 @@ with "Your app does not open or load". The reviewer's screenshot showed the laun
 icon on the splash background and nothing else: the shell started, the webview never
 painted a page.
 
+## Status
+
+The rejection had a second cause, found after this entry was written and after the
+permission was restored: the page never loaded `cordova.js`, so `deviceready` never
+fired and the app waited for ever before drawing anything. That one is confirmed by
+the code — see [deviceready-needs-cordova-js.md](deviceready-needs-cordova-js.md) —
+and on its own explains the blank screen.
+
+What follows has not been reproduced on a device. It is why the permission is back,
+and it is right in either case: cordova-android declares INTERNET by default and the
+app needs no permission list to prove it is offline. Treat "the load is refused" as
+well-supported, not as measured here.
+
 ## The fact
 
 Two configuration choices that each look correct cannot both be made.

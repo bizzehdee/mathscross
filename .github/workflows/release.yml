@@ -86,6 +86,23 @@ jobs:
           fi
           echo "Permissions declared: INTERNET only."
 
+      # `deviceready` only fires if the page loads cordova.js, and cordova.js only
+      # exists in the packaged assets — `cordova prepare` copies it out of the
+      # platform, so it is absent from native/www and no local check can miss its
+      # absence. The first build shipped without the tag and opened to a blank
+      # screen, which is what Play rejected. Assert both halves against what was
+      # actually packaged.
+      - name: Assert the packaged page loads cordova.js
+        working-directory: native
+        run: |
+          WWW=platforms/android/app/src/main/assets/www
+          test -f "$WWW/cordova.js" \
+            || { echo "$WWW/cordova.js is missing. The shell cannot initialise." >&2; exit 1; }
+          grep -q 'src="cordova.js"' "$WWW/index.html" \
+            || { echo "index.html does not load cordova.js; deviceready will never fire." >&2
+                 grep -n '<script' "$WWW/index.html" >&2; exit 1; }
+          echo "cordova.js is packaged and referenced."
+
       # The installed icon must be the one on the store listing; Play rejects a
       # mismatch. Cordova copies the files named in config.xml into the platform's
       # mipmap resources, and a typo in a path is only a warning there, so compare

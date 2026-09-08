@@ -17,6 +17,44 @@ export function appVersion(): string {
 }
 
 /**
+ * How long to wait for `deviceready` before giving up on it.
+ *
+ * Cordova fires the event within a few hundred milliseconds of the webview
+ * loading, so a second is generous. It is not tuned: nothing depends on the exact
+ * value, only on there being one.
+ */
+const DEVICEREADY_TIMEOUT_MS = 1000
+
+/**
+ * Resolves when Cordova fires `deviceready`, or when waiting stops being worth it.
+ *
+ * Exported for its test. The timeout is the point: waiting for the shell is an
+ * optimisation — the back button binding needs Cordova, the game does not — and an
+ * unbounded wait turns a missing shell into an app that never draws anything.
+ *
+ * The first Android build shipped a page that never referenced `cordova.js`, so
+ * nothing was ever going to fire the event and it opened to a blank screen. See
+ * `.learnings/deviceready-needs-cordova-js.md`.
+ */
+export function waitForDeviceReady(timeoutMs = DEVICEREADY_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = globalThis.setTimeout(() => {
+      console.warn('deviceready did not fire; mounting without the Cordova shell.')
+      resolve()
+    }, timeoutMs)
+
+    document.addEventListener(
+      'deviceready',
+      () => {
+        globalThis.clearTimeout(timer)
+        resolve()
+      },
+      { once: true },
+    )
+  })
+}
+
+/**
  * Resolves once the platform is ready to be driven.
  *
  * A Cordova shell must wait for `deviceready` before native APIs exist. The web
@@ -28,9 +66,7 @@ export function whenPlatformReady(): Promise<void> {
     return Promise.resolve()
   }
 
-  return new Promise((resolve) => {
-    document.addEventListener('deviceready', () => resolve(), { once: true })
-  })
+  return waitForDeviceReady()
 }
 
 /**

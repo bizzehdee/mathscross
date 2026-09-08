@@ -141,7 +141,9 @@ so `config.xml`, the hook and the release workflow are written from the plan and
 the sibling project's working setup, and are **unverified**. Before the first
 release, check on a device:
 
-- the app launches and the board is playable offline;
+- the app launches and the board is playable offline — it did not, twice: see
+  `../.learnings/deviceready-needs-cordova-js.md` and
+  `../.learnings/https-origin-needs-internet-permission.md`;
 - `localStorage` survives an app restart **and an upgrade** — the origin
   preferences in `config.xml` are what make that work, and the failure is silent
   (see `../.learnings/native-shell-origin.md`);

@@ -2070,10 +2070,24 @@ Each milestone ends with tests passing in CI.
   signing through `build.json`, and a dormant Play publish step.
 
   M6 also stripped the `INTERNET` permission with an `after_prepare` hook. That is
-  gone: Play rejected the first submission with "your app does not open or load",
-  because a webview without the permission will not load an https origin and the
-  asset loader never sees the request. `release.yml` now asserts that `INTERNET` is
-  present and is the only permission declared.
+  gone: a webview without the permission will not load an https origin and the asset
+  loader never sees the request. `release.yml` now asserts that `INTERNET` is present
+  and is the only permission declared.
+
+  **The shell shipped and did not open.** Play rejected the first submission with
+  "your app does not open or load", and a build on a phone confirmed it. The cause
+  was the page never loading `cordova.js`: Cordova does not inject its own runtime,
+  the file exists only in the packaged assets, `deviceready` therefore never fired,
+  and `main.ts` was waiting for it before mounting. The bundle was correct and the
+  app was empty. Fixed in three places — the native build injects the script tag,
+  `waitForDeviceReady` gives up after a second and mounts anyway, and `release.yml`
+  asserts both against the packaged `assets/www`. Recorded in
+  `.learnings/deviceready-needs-cordova-js.md`.
+
+  The lesson for the rest of this plan: the native branch of `ui/platform` is not
+  exercised by the suite, because `__NATIVE_SHELL__` is false under Vitest. Anything
+  that branch gains needs a test written against the function directly, as
+  `platform.test.ts` now does.
 
   **The shell itself has never been built.** There is no Android SDK on the
   development machine, so `config.xml` and the workflow are written from this plan

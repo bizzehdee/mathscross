@@ -4,9 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>MathsCross</title>
-    <!-- The game is offline by design and makes no network requests. Stated
-         here as well as by the absent INTERNET permission, so the web target
-         carries the same guarantee as the Android one. Plan section 9.4. -->
+    <!-- The game is offline by design and makes no network requests. The policy
+         below is what enforces that on both targets: the Android app holds the
+         INTERNET permission, because its webview needs it to load this page from
+         https://localhost, so the manifest is not the guarantee. Plan section 9.4. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"

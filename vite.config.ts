@@ -116,6 +116,7 @@ export function createConfig(target: BuildTarget) {
     },
     plugins: [
       relaxCspForDevServer(),
+      ...(native ? [injectCordovaScript()] : []),
       VitePWA({
         // Emits no service worker and no manifest for a native build. A shell
         // already holds every asset on the device, so there is nothing to cache
@@ -196,6 +197,29 @@ function relaxCspForDevServer() {
         "connect-src 'none'",
         "connect-src 'self' ws: wss:",
       )
+    },
+  }
+}
+
+/**
+ * Adds `<script src="cordova.js">` to the native build's HTML.
+ *
+ * Cordova does not inject it. `cordova.js` is generated per platform and copied
+ * into the packaged `assets/www` by `cordova prepare`, so it exists in the app but
+ * never in `native/www` on disk, and no local build can notice that the page does
+ * not ask for it.
+ *
+ * Without it `deviceready` never fires. The first Android build shipped that way and
+ * opened to a blank screen, because `whenPlatformReady` was waiting for an event
+ * that had nobody to fire it. See `.learnings/deviceready-needs-cordova-js.md`.
+ *
+ * Native only. The web build has no such file and would ask for a 404.
+ */
+function injectCordovaScript() {
+  return {
+    name: 'mathscross:inject-cordova-script',
+    transformIndexHtml(): { tag: string; attrs: Record<string, string>; injectTo: 'head' }[] {
+      return [{ tag: 'script', attrs: { src: 'cordova.js' }, injectTo: 'head' }]
     },
   }
 }
