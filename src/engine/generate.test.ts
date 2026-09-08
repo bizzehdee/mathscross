@@ -302,6 +302,61 @@ describe('generated puzzles', () => {
   }
 })
 
+describe('boards carrying more than one equation length', () => {
+  it('masks cells on both the short and the long equations at Hard', () => {
+    // Hard mixes 5-cell and 11-cell equations, and the masking order prefers cells
+    // more equations cross. Left unchecked that preference could confine the mask
+    // to the long lines, which are the ones with the most crossings — and a board
+    // whose short equations are all given is an easier board than Hard claims.
+    let short = 0
+    let long = 0
+
+    for (const seed of SEEDS) {
+      const result = generated(seed, Difficulty.Hard)
+      if (!result.ok) {
+        continue
+      }
+      const { puzzle } = result.puzzle
+      for (const equation of parseGrid(puzzle).equations) {
+        const blanks = equation.cells.filter((cell) => puzzle.values[cell] === EMPTY).length
+        if (equation.cells.length === 5) {
+          short += blanks
+        } else {
+          long += blanks
+        }
+      }
+    }
+
+    expect(short).toBeGreaterThan(0)
+    expect(long).toBeGreaterThan(0)
+  })
+
+  it('varies the width shape between Medium seeds', () => {
+    // Medium's six equations each choose from three width triples, which is 3^6
+    // shapes on one layout. It is where a fixed layout gets its variety back, so a
+    // change that fixed the choice would go unnoticed without this.
+    const shapes = new Set<string>()
+
+    for (const seed of SEEDS) {
+      const result = generated(seed, Difficulty.Medium)
+      if (!result.ok) {
+        continue
+      }
+      const { puzzle } = result.puzzle
+      shapes.add(
+        parseGrid(puzzle)
+          .equations.map((equation) => {
+            const shape = binaryShape(equation)
+            return `${shape?.left.cells.length}${shape?.right.cells.length}${shape?.result.cells.length}`
+          })
+          .join(' '),
+      )
+    }
+
+    expect(shapes.size).toBeGreaterThan(1)
+  })
+})
+
 describe('determinism', () => {
   it('produces identical output for the same seed and difficulty', () => {
     // The daily puzzle depends on this: the same date must give the same board on

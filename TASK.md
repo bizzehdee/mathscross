@@ -9,7 +9,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-001: Remove the Extreme difficulty
 - [x] TASK-002: Add the fixed layout table
 - [x] TASK-003: Phase 1 reads a layout instead of searching for a mesh
-- [ ] TASK-004: Fill and mask across mixed equation lengths
+- [x] TASK-004: Fill and mask across mixed equation lengths
 - [ ] TASK-005: Re-measure Hard and reset its mask targets
 - [ ] TASK-006: Render an 11 x 11 board on a phone
 - [ ] TASK-007: The five named palettes and their previews
