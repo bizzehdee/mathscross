@@ -134,20 +134,21 @@ Once that has happened, setting `PLAY_SERVICE_ACCOUNT_JSON` turns on automated
 publishing from `release.yml`. Until it is set, the publish step is dormant and the
 binaries are simply attached to the GitHub Release.
 
-## What has not been verified
+## What has been checked on a device
 
-The shell has never been built. There is no Android SDK on the development machine,
-so `config.xml`, the hook and the release workflow are written from the plan and from
-the sibling project's working setup, and are **unverified**. Before the first
-release, check on a device:
+v0.1.3 launches, the game runs, and rotating the phone keeps the webview and the
+board in place. Two defects had to be fixed to get there, both found only by running
+it: the page never loaded `cordova.js`, so `deviceready` never fired and nothing
+mounted (`../.learnings/deviceready-needs-cordova-js.md`), and the INTERNET
+permission had been stripped from a shell that serves over an https origin
+(`../.learnings/https-origin-needs-internet-permission.md`).
 
-- the app launches and the board is playable offline — it did not, twice: see
-  `../.learnings/deviceready-needs-cordova-js.md` and
-  `../.learnings/https-origin-needs-internet-permission.md`;
-- `localStorage` survives an app restart **and an upgrade** — the origin
-  preferences in `config.xml` are what make that work, and the failure is silent
-  (see `../.learnings/native-shell-origin.md`);
-- the manifest declares INTERNET and no other permission;
-- the launcher icon on the home screen is this app's mark, not Cordova's;
-- rotation does not reload the WebView or lose an in-progress board;
+CI checks the manifest permissions and the launcher icon against what was packaged,
+so those are covered on every release. Still to check on a device:
+
+- `localStorage` survives an app restart **and an upgrade** — install one version,
+  play, install the next over it, and confirm stats, streak and the in-progress board
+  are all still there. The origin preferences in `config.xml` are what make this work
+  and the failure is silent (see `../.learnings/native-shell-origin.md`). This is the
+  one that matters most, and an upgrade is the only way to see it;
 - a tap on a board cell registers with no perceptible delay.

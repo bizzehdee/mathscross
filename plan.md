@@ -2089,12 +2089,16 @@ Each milestone ends with tests passing in CI.
   that branch gains needs a test written against the function directly, as
   `platform.test.ts` now does.
 
-  **The shell itself has never been built.** There is no Android SDK on the
-  development machine, so `config.xml` and the workflow are written from this plan
-  and from the sibling's working setup. `native/README.md` lists what must be checked
-  on a device before the first release, and the one that matters most is that
-  `localStorage` survives an app **upgrade** — the origin preferences are what make
-  that work and the failure is silent.
+  **The shell runs.** v0.1.3 launches on a device, the game is playable, and
+  rotation keeps the webview alive — the `configChanges` in section 9.2 do what they
+  were meant to. Both
+  defects that stood in the way were invisible to every check that did not load the
+  page, which is the M6 lesson worth carrying: the shell is the one part of this
+  project no test in the repository exercises.
+
+  What is still unverified is what `native/README.md` lists, and the one that matters
+  most is that `localStorage` survives an app **upgrade** — the origin preferences
+  are what make that work and the failure is silent.
 - **M7 — Release hardening. Written; three items wait on a device.**
   `store/listing.md` with the name, descriptions, Data Safety answers and content
   rating, `store/README.md` with the capture procedure, the drawn assets from
