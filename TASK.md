@@ -14,7 +14,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-005: Re-measure Hard and reset its mask targets
 - [x] TASK-006: Render an 11 x 11 board on a phone
 - [x] TASK-007: The five named palettes and their previews
-- [ ] TASK-008: Documentation and store listing
+- [x] TASK-008: Documentation and store listing
 - [x] TASK-010: The header takes 86px of a landscape phone
 
 ---
@@ -298,6 +298,17 @@ Depends on: TASK-001, TASK-003, TASK-005, TASK-007
   built, and correct them where they do not.
 
 Done when: no user-facing text describes four difficulties or a 9 x 9 board.
+
+**Done.** `README.md` gains a difficulty table and a themes section; `store/listing.md`
+drops Extreme from the feature list and the guess-free paragraph, and says nine themes
+rather than four.
+
+Plan sections 2.7, 2.9, 5.6, 8.1 and 8.2 were checked against the code rather than
+read: grid sizes, the Hard picture character for character against `layouts.ts`, the
+mask targets, the equation and intersection counts, and the daily rotation. All agree.
+
+The bundle is 19.6 KiB of JS and 2.8 KiB of CSS gzipped, against ceilings of 40 and 8,
+so five extra palettes cost nothing that matters.
 
 ## TASK-010: The header takes 86px of a landscape phone
 

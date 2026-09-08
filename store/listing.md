@@ -55,16 +55,15 @@ to the answer, and at no point do you have to try a value to see whether it work
 Nothing is left to trial and error.
 
 That makes them suited to children of around nine and up, and to anyone who finds a
-puzzle that requires guesswork unsatisfying. Hard and Extreme lift the restriction —
-they still have exactly one answer, but finding it may take experiment.
+puzzle that requires guesswork unsatisfying. Hard lifts the restriction — it still
+has exactly one answer, but finding it may take experiment.
 
 WHAT YOU GET
 
-• Four difficulties, each adding one thing rather than several at once.
+• Three difficulties, each adding one thing rather than several at once.
   Easy is a 5x5 with single digits, plus and minus.
   Medium is a 7x7 with two-digit numbers and multiplication, every operator shown.
-  Hard adds negative numbers and hides some of the operators.
-  Extreme is a 9x9 with three-digit numbers, division, and every operator hidden.
+  Hard is an 11x11 with three-digit numbers, and it hides some of the operators.
 • A daily puzzle. One shared puzzle a day, the same for everyone, with a streak to
   keep. It changes at midnight UTC.
 • Unlimited puzzles. Each one is made fresh and has exactly one solution — always
@@ -73,7 +72,8 @@ WHAT YOU GET
 • Your progress is saved. Close the app mid-puzzle and pick it up later, undo
   history included.
 • Statistics: puzzles completed, best and typical times, and your daily streak.
-• Four themes, including a high-contrast one.
+• Nine themes, including a high-contrast one and five for players who would rather
+  do their sums on a football pitch, in space, or underwater.
 
 NORMAL ARITHMETIC
 

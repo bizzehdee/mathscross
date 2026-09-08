@@ -30,6 +30,30 @@ either mark a correct answer wrong, or teach a habit that has to be unlearned.
 reads as fifteen, not as two operands. This is the one thing about the game worth
 explaining, and the board draws grouped cells to show it.
 
+## The three difficulties
+
+| | Board | Numbers | Operators | Solvable by logic alone |
+|---|---|---|---|---|
+| Easy | 5x5 | single digits | `+` `-` | guaranteed |
+| Medium | 7x7 | up to two digits | `+` `-` `*` | guaranteed |
+| Hard | 11x11 | up to three digits | `+` `-` `*`, some hidden | not guaranteed |
+
+Each grade adds one thing rather than several at once. Easy and Medium are checked
+during generation for a chain of forced steps from the givens to the answer, so
+neither ever needs a guess. Hard still has exactly one answer; finding it may take
+an experiment.
+
+Every board's shape is fixed and hand-drawn — one layout per difficulty, in
+`src/engine/layouts.ts`. What differs between two puzzles at the same grade is the
+arithmetic, which cells are given, and at Medium the widths of the numbers.
+
+## Themes
+
+Nine: system, light, dark, high contrast, and five named palettes — football, space,
+sweets, jungle and ocean. Settings shows a miniature board in each, so a choice is
+made by looking rather than by reading. Every palette is checked for 4.5:1 contrast
+on the colours a player has to read.
+
 ## Development
 
 Requires Node 20.
