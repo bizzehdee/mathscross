@@ -40,33 +40,11 @@ export type NumberReading = { readonly ok: true; readonly value: number } | {
  * about zero. Plan section 2.2.
  */
 export function readNumber(grid: Grid, token: NumberToken): NumberReading {
-  const cells = token.cells
-  if (cells.length === 0) {
-    return { ok: false, problem: 'incomplete' }
+  const value = readNumberValue(grid, token)
+  if (value >= 0) {
+    return { ok: true, value }
   }
-
-  let value = 0
-  for (let position = 0; position < cells.length; position += 1) {
-    const cell = cells[position]
-    if (cell === undefined) {
-      return { ok: false, problem: 'incomplete' }
-    }
-    const digit = grid.values[cell]
-    if (digit === undefined || digit === EMPTY) {
-      return { ok: false, problem: 'incomplete' }
-    }
-    if (position === 0 && digit === 0 && cells.length > 1) {
-      return { ok: false, problem: 'leading-zero' }
-    }
-    value = value * 10 + digit
-  }
-  return { ok: true, value }
-}
-
-/** One term of a side: a signed number, with the operator that precedes it. */
-interface Term {
-  readonly operator: Operator | null
-  readonly value: number
+  return { ok: false, problem: value === -2 ? 'leading-zero' : 'incomplete' }
 }
 
 type SideReading =
@@ -74,125 +52,176 @@ type SideReading =
   | { readonly ok: false; readonly problem: 'incomplete' | 'invalid' }
 
 /**
- * Evaluates one side of an equals.
+ * Whether the last `evaluateSideValue` succeeded, and why it did not.
  *
- * Two passes, which is what makes precedence work without building a tree.
- * The first pass collapses every division and multiplication left to right,
- * leaving only additive terms. The second sums those left to right.
+ * Module scope rather than a returned object, because the solver evaluates
+ * equations millions of times a board and an allocation per call was the largest
+ * single cost in it. Safe because nothing here re-enters: `evaluateSideValue`
+ * calls no evaluator, and the value is read immediately by its caller.
  */
-function evaluateSide(grid: Grid, tokens: readonly Token[]): SideReading {
-  const terms = readTerms(grid, tokens)
-  if (!terms.ok) {
-    return terms
-  }
-
-  // Pass one: the multiplicative tier, left to right.
-  const additive: Term[] = []
-  for (const term of terms.terms) {
-    if (term.operator === Operator.Times || term.operator === Operator.Divide) {
-      const previous = additive.pop()
-      if (previous === undefined) {
-        return { ok: false, problem: 'invalid' }
-      }
-      if (term.operator === Operator.Times) {
-        additive.push({ operator: previous.operator, value: previous.value * term.value })
-        continue
-      }
-      if (term.value === 0 || previous.value % term.value !== 0) {
-        // Division by zero, or a division that is not exact. Checked here, at
-        // the point precedence reaches it, never deferred or reordered.
-        return { ok: false, problem: 'invalid' }
-      }
-      additive.push({ operator: previous.operator, value: previous.value / term.value })
-      continue
-    }
-    additive.push(term)
-  }
-
-  // Pass two: the additive tier, left to right.
-  const first = additive[0]
-  if (first === undefined) {
-    return { ok: false, problem: 'invalid' }
-  }
-  let total = first.value
-  for (let index = 1; index < additive.length; index += 1) {
-    const term = additive[index]
-    if (term === undefined) {
-      return { ok: false, problem: 'invalid' }
-    }
-    if (term.operator === Operator.Plus) {
-      total += term.value
-    } else if (term.operator === Operator.Minus) {
-      total -= term.value
-    } else {
-      return { ok: false, problem: 'invalid' }
-    }
-  }
-  return { ok: true, value: total }
-}
-
-type TermsReading =
-  | { readonly ok: true; readonly terms: readonly Term[] }
-  | { readonly ok: false; readonly problem: 'incomplete' | 'invalid' }
+let sideOk = true
+let sideProblem: 'incomplete' | 'invalid' = 'invalid'
 
 /**
- * Flattens a side's tokens into signed terms.
+ * Reads one number as a value, or a negative marker.
  *
- * A `sign` operator negates the number that follows it rather than becoming a
- * term of its own, so `5 - -3` yields terms 5 and -3 joined by subtraction.
+ * `-1` is incomplete and `-2` is a leading zero. A number is never negative — a
+ * sign is a token of its own — so a negative return is unambiguous.
  */
-function readTerms(grid: Grid, tokens: readonly Token[]): TermsReading {
-  const terms: Term[] = []
-  let pendingOperator: Operator | null = null
+function readNumberValue(grid: Grid, token: NumberToken): number {
+  const cells = token.cells
+  const length = cells.length
+  if (length === 0) {
+    return -1
+  }
+
+  let value = 0
+  for (let position = 0; position < length; position += 1) {
+    const cell = cells[position]
+    if (cell === undefined) {
+      return -1
+    }
+    const digit = grid.values[cell]
+    if (digit === undefined || digit === EMPTY) {
+      return -1
+    }
+    if (position === 0 && digit === 0 && length > 1) {
+      return -2
+    }
+    value = value * 10 + digit
+  }
+  return value
+}
+
+/** Whether the last `evaluateSideValue` produced a usable value. */
+export function lastSideOk(): boolean {
+  return sideOk
+}
+
+/**
+ * Evaluates one side of an equals. Check `lastSideOk` before using the result.
+ *
+ * Exported for the solver, which evaluates one side at a time: when it is trying
+ * candidate values for a single empty cell, only the side holding that cell can
+ * change, so the other is evaluated once and compared against.
+ *
+ * Three running values and no arrays: `total` is the additive tier so far,
+ * `pending` the operator waiting to join the next term to it, and `current` the
+ * multiplicative chain being built. A `*` or `/` folds into `current` as it is
+ * read; a `+` or `-` closes `current` into `total`. That is the same left-to-right
+ * association within each tier the two-pass version had, without the term list.
+ *
+ * An earlier attempt kept the two passes and reused module-level scratch arrays
+ * instead of allocating them. It was *slower* than the allocating version it
+ * replaced — a shared growable array is not free to write to. Local numbers are.
+ *
+ * A `sign` operator negates the number that follows rather than becoming a term
+ * of its own, so `5 - -3` reads as 5 and -3 joined by subtraction.
+ */
+export function evaluateSideValue(grid: Grid, tokens: readonly Token[]): number {
+  sideOk = true
+
+  let total = 0
+  let current = 0
+  let started = false
+  /** The additive operator joining `current` to `total`, null for the first term. */
+  let joining: Operator | null = null
+  let pending: Operator | null = null
   let negate = false
   let expectingNumber = true
 
   for (const token of tokens) {
     if (token.kind === 'equals') {
-      return { ok: false, problem: 'invalid' }
+      sideOk = false
+      sideProblem = 'invalid'
+      return 0
     }
 
     if (token.kind === 'operator') {
-      const value = grid.values[token.cell]
-      if (value === undefined || value === EMPTY) {
-        return { ok: false, problem: 'incomplete' }
+      const held = grid.values[token.cell]
+      if (held === undefined || held === EMPTY) {
+        sideOk = false
+        sideProblem = 'incomplete'
+        return 0
       }
-      const operator = value as Operator
+      const operator = held as Operator
 
       if ((token as OperatorToken).role === 'sign') {
         if (operator !== Operator.Minus) {
           // A sign position admits only minus. Plan section 2.3.
-          return { ok: false, problem: 'invalid' }
+          sideOk = false
+          sideProblem = 'invalid'
+          return 0
         }
         negate = true
         continue
       }
 
       if (expectingNumber) {
-        return { ok: false, problem: 'invalid' }
+        sideOk = false
+        sideProblem = 'invalid'
+        return 0
       }
-      pendingOperator = operator
+      pending = operator
       expectingNumber = true
       continue
     }
 
-    const reading = readNumber(grid, token)
-    if (!reading.ok) {
-      return reading.problem === 'incomplete'
-        ? { ok: false, problem: 'incomplete' }
-        : { ok: false, problem: 'invalid' }
+    const read = readNumberValue(grid, token)
+    if (read < 0) {
+      sideOk = false
+      sideProblem = read === -1 ? 'incomplete' : 'invalid'
+      return 0
     }
 
-    terms.push({ operator: pendingOperator, value: negate ? -reading.value : reading.value })
-    pendingOperator = null
+    const value = negate ? -read : read
     negate = false
     expectingNumber = false
+
+    if (!started) {
+      current = value
+      started = true
+      pending = null
+      continue
+    }
+
+    if (pending === Operator.Times) {
+      current *= value
+    } else if (pending === Operator.Divide) {
+      if (value === 0 || current % value !== 0) {
+        // Division by zero, or a division that is not exact. Checked here, at the
+        // point precedence reaches it, never deferred or reordered.
+        sideOk = false
+        sideProblem = 'invalid'
+        return 0
+      }
+      current /= value
+    } else if (pending === Operator.Plus || pending === Operator.Minus) {
+      total = joining === Operator.Minus ? total - current : total + current
+      joining = pending
+      current = value
+    } else {
+      sideOk = false
+      sideProblem = 'invalid'
+      return 0
+    }
+
+    pending = null
   }
 
-  if (expectingNumber || terms.length === 0) {
-    return { ok: false, problem: 'invalid' }
+  if (expectingNumber || !started) {
+    sideOk = false
+    sideProblem = 'invalid'
+    return 0
   }
-  return { ok: true, terms }
+
+  return joining === Operator.Minus ? total - current : total + current
+}
+
+/** The allocating form, for callers outside the solver's hot path. */
+function evaluateSide(grid: Grid, tokens: readonly Token[]): SideReading {
+  const value = evaluateSideValue(grid, tokens)
+  return sideOk ? { ok: true, value } : { ok: false, problem: sideProblem }
 }
 
 /**
@@ -202,35 +231,34 @@ function readTerms(grid: Grid, tokens: readonly Token[]): TermsReading {
  * and the board must not tell a player their partial work is a mistake.
  */
 export function equationState(grid: Grid, equation: Equation): EquationState {
-  const equalsAt = equation.tokens.findIndex((token) => token.kind === 'equals')
-  if (equalsAt === -1) {
+  if (equation.rightTokens.length === 0) {
     return 'unsatisfied'
   }
 
-  const left = evaluateSide(grid, equation.tokens.slice(0, equalsAt))
-  const right = evaluateSide(grid, equation.tokens.slice(equalsAt + 1))
+  // `incomplete` outranks `unsatisfied`, so a failure on the left still has to
+  // look at the right: an invalid left and an incomplete right reads incomplete.
+  const left = evaluateSideValue(grid, equation.leftTokens)
+  const leftProblem = sideOk ? null : sideProblem
 
-  if (!left.ok && left.problem === 'incomplete') {
-    return 'incomplete'
+  const right = evaluateSideValue(grid, equation.rightTokens)
+  if (!sideOk) {
+    return sideProblem === 'incomplete' || leftProblem === 'incomplete'
+      ? 'incomplete'
+      : 'unsatisfied'
   }
-  if (!right.ok && right.problem === 'incomplete') {
-    return 'incomplete'
+  if (leftProblem !== null) {
+    return leftProblem === 'incomplete' ? 'incomplete' : 'unsatisfied'
   }
-  if (!left.ok || !right.ok) {
-    return 'unsatisfied'
-  }
-  return left.value === right.value ? 'satisfied' : 'unsatisfied'
+
+  return left === right ? 'satisfied' : 'unsatisfied'
 }
 
 /** The value of one side, for callers that need it rather than a comparison. */
 export function sideValue(grid: Grid, equation: Equation, side: 'left' | 'right'): SideReading {
-  const equalsAt = equation.tokens.findIndex((token) => token.kind === 'equals')
-  if (equalsAt === -1) {
+  if (equation.rightTokens.length === 0) {
     return { ok: false, problem: 'invalid' }
   }
-  const tokens =
-    side === 'left' ? equation.tokens.slice(0, equalsAt) : equation.tokens.slice(equalsAt + 1)
-  return evaluateSide(grid, tokens)
+  return evaluateSide(grid, side === 'left' ? equation.leftTokens : equation.rightTokens)
 }
 
 export type BoardState = 'solved' | 'invalid' | 'incomplete'

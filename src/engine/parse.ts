@@ -44,6 +44,23 @@ export interface Equation {
   /** Every cell in the equation, in reading order. */
   readonly cells: readonly number[]
   readonly tokens: readonly Token[]
+  /**
+   * The tokens either side of the equals, split once here.
+   *
+   * `equationState` is the solver's hottest call, and it used to find the equals
+   * and slice the token list on every one of them — two allocations per call,
+   * millions per board. The split depends only on cell kinds, like everything else
+   * in this module, so it survives every assignment.
+   */
+  readonly leftTokens: readonly Token[]
+  readonly rightTokens: readonly Token[]
+  /**
+   * How many of `cells` sit left of the equals.
+   *
+   * Lets a caller tell which side a cell is on by its position, without walking
+   * the tokens. The solver uses it to re-evaluate only the side it just changed.
+   */
+  readonly leftCellCount: number
 }
 
 export type GridProblem =
@@ -235,7 +252,29 @@ function considerRun(
     return
   }
 
-  equations.push({ orientation, line, cells: frozen, tokens })
+  // `describeMalformation` has already rejected an equation without exactly one
+  // equals, so the index is real. Guarded anyway: an empty right side reads as
+  // unsatisfied downstream, which is what a missing equals should mean.
+  const equalsAt = tokens.findIndex((token) => token.kind === 'equals')
+
+  equations.push({
+    orientation,
+    line,
+    cells: frozen,
+    tokens,
+    leftTokens: equalsAt === -1 ? [] : tokens.slice(0, equalsAt),
+    rightTokens: equalsAt === -1 ? [] : tokens.slice(equalsAt + 1),
+    leftCellCount: equalsAt === -1 ? 0 : cellsIn(tokens.slice(0, equalsAt)),
+  })
+}
+
+/** How many grid cells a token list covers. A number spans one cell per digit. */
+function cellsIn(tokens: readonly Token[]): number {
+  let count = 0
+  for (const token of tokens) {
+    count += token.kind === 'number' ? token.cells.length : 1
+  }
+  return count
 }
 
 /**

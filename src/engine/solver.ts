@@ -16,13 +16,15 @@
  *     first solution. The generator relies on this: the daily puzzle must be
  *     identical on every device.
  */
-import { equationState } from './evaluate'
-import { assignableAmong, cloneValues, isAssignable } from './grid'
+import { equationState, evaluateSideValue, lastSideOk } from './evaluate'
+import { cloneValues, isAssignable } from './grid'
 import {
   binaryShape,
   orderEquations,
   parseGrid,
+  type BinaryShape,
   type Equation,
+  type NumberToken,
   type ParsedGrid,
 } from './parse'
 import {
@@ -114,6 +116,14 @@ interface Compiled {
   readonly variables: readonly number[]
   /** Candidate values for each cell index, by flat index. */
   readonly domains: readonly (readonly number[])[]
+  /**
+   * Each equation's `a op b = c` shape, or null where it has none.
+   *
+   * Structural, like everything else here. `propagateNumbers` used to derive it
+   * per equation per propagation pass, which came to 9.9 million calls on a Hard
+   * board.
+   */
+  readonly shapes: readonly (BinaryShape | null)[]
 }
 
 export function solve(grid: Grid, options: SolveOptions = {}): SolveResult {
@@ -131,7 +141,7 @@ export function solve(grid: Grid, options: SolveOptions = {}): SolveResult {
   const solutions: Int8Array[] = []
   const budget = { remaining: options.maxNodes ?? DEFAULT_MAX_NODES }
 
-  search(grid, compiled, values, solutions, maxSolutions, techniques, budget)
+  search(grid, compiled, values, solutions, maxSolutions, techniques, budget, null, 0, [])
 
   return {
     count: solutions.length,
@@ -192,7 +202,12 @@ function compile(
     }
   }
 
-  return { parsed, variables: orderVariables(variables, parsed), domains }
+  return {
+    parsed,
+    variables: orderVariables(variables, parsed),
+    domains,
+    shapes: parsed.equations.map((equation) => binaryShape(equation)),
+  }
 }
 
 /**
@@ -263,6 +278,9 @@ function search(
   maxSolutions: number,
   techniques: Set<Technique>,
   budget: { remaining: number },
+  dirty: readonly number[] | null,
+  depth: number,
+  snapshots: Int8Array[],
 ): void {
   if (solutions.length >= maxSolutions || budget.remaining <= 0) {
     return
@@ -271,7 +289,7 @@ function search(
 
   const working = { size: grid.size, kinds: grid.kinds, values }
 
-  const propagated = propagate(working, compiled, techniques)
+  const propagated = propagate(working, compiled, techniques, dirty)
   if (propagated === 'contradiction') {
     return
   }
@@ -286,11 +304,35 @@ function search(
 
   techniques.add('search')
 
+  // One buffer per depth, reused across candidates and across nodes at that
+  // depth. A fresh `Int8Array` per candidate was millions of allocations a board,
+  // and the recursion is bounded by the variable count.
+  let snapshot = snapshots[depth]
+  if (snapshot === undefined) {
+    snapshot = new Int8Array(values.length)
+    snapshots[depth] = snapshot
+  }
+  snapshot.set(values)
+
+  // Only the equations holding the assigned cell can have changed, so that is
+  // what the child propagates from.
+  const affected = compiled.parsed.equationsByCell[next] ?? []
+
   for (const candidate of compiled.domains[next] ?? []) {
-    const snapshot = new Int8Array(values)
     values[next] = candidate
     if (!violates(working, compiled, next)) {
-      search(grid, compiled, values, solutions, maxSolutions, techniques, budget)
+      search(
+        grid,
+        compiled,
+        values,
+        solutions,
+        maxSolutions,
+        techniques,
+        budget,
+        affected,
+        depth + 1,
+        snapshots,
+      )
       if (solutions.length >= maxSolutions || budget.remaining <= 0) {
         values.set(snapshot)
         return
@@ -301,171 +343,248 @@ function search(
 }
 
 /**
- * Fills every cell that arithmetic forces, repeatedly, until nothing changes.
+ * Fills every cell that arithmetic forces, until nothing changes.
  *
- * An equation with one empty cell has a candidate set of the values that satisfy
- * it. One candidate means the cell is determined — logged as `direct`. Where a
- * cell sits in two such equations and the intersection of their candidate sets is
- * smaller than either, that is logged as `domain`.
+ * Two rules, applied to an equation until it yields nothing more:
+ *
+ *   - **Numbers.** With the operator and two of the three numbers known, the third
+ *     follows. Not an optimisation but the thing that makes the solver usable:
+ *     cell-level propagation alone only fires when an equation has a single empty
+ *     *cell*, which on a heavily masked board is almost never true early, so
+ *     nothing pruned and a uniqueness check took 16 seconds.
+ *   - **Cells.** An equation with one empty cell has a candidate set of the values
+ *     that satisfy it. One candidate means that cell is determined.
+ *
+ * **Only equations a change touched are revisited.** `dirty` seeds the work list
+ * with the equations holding the cell the caller just assigned, and writing a cell
+ * puts its equations back on the list; passing null means every equation, which is
+ * what a fresh solve wants. The old version walked all of them on every pass, and
+ * one assignment touches at most two — about 55% of the whole solver's time went on
+ * re-deriving equations that had not changed. Propagation only ever adds
+ * information, so the fixed point does not depend on the order rules are applied
+ * in, and this reaches the same one.
  */
 function propagate(
   working: Grid,
   compiled: Compiled,
   techniques: Set<Technique>,
+  dirty: readonly number[] | null,
 ): 'ok' | 'contradiction' {
-  let changed = true
+  const equations = compiled.parsed.equations
+  const queued = new Uint8Array(equations.length)
+  const queue: number[] = []
 
-  while (changed) {
-    changed = false
+  const enqueue = (index: number): void => {
+    if (queued[index] === 1) {
+      return
+    }
+    queued[index] = 1
+    queue.push(index)
+  }
 
-    // Number level first. Plan section 6.2: when two of an equation's three
-    // numbers and its operator are known, compute the third and write its digits
-    // rather than searching each cell.
-    //
-    // This is not an optimisation, it is what makes the solver usable. Cell-level
-    // propagation alone only fires when an equation has a single empty *cell*,
-    // which on a 60%-masked Medium board is almost never true early — so nothing
-    // pruned, and a uniqueness check that should cost milliseconds took 16 seconds.
-    const numeric = propagateNumbers(working, compiled, techniques)
+  if (dirty === null) {
+    for (let index = 0; index < equations.length; index += 1) {
+      enqueue(index)
+    }
+  } else {
+    for (const index of dirty) {
+      enqueue(index)
+    }
+  }
+
+  /** Puts every equation holding this cell back on the list. */
+  const touched = (cell: number): void => {
+    for (const index of compiled.parsed.equationsByCell[cell] ?? []) {
+      enqueue(index)
+    }
+  }
+
+  while (queue.length > 0) {
+    const index = queue.pop() as number
+    queued[index] = 0
+    const equation = equations[index]
+    if (equation === undefined) {
+      continue
+    }
+
+    const numeric = propagateNumbers(working, compiled, index, techniques, touched)
     if (numeric === 'contradiction') {
       return 'contradiction'
     }
-    if (numeric === 'changed') {
-      changed = true
+
+    // Cell level. One empty cell is the only case worth deriving; two or more
+    // leaves nothing forced, and none means the equation is decidable now.
+    let empty = -1
+    let empties = 0
+    for (const cell of equation.cells) {
+      // `isAssignable` inlined: block and equals cells hold EMPTY permanently, so
+      // the kind test is what separates them from a cell waiting to be filled.
+      if (working.values[cell] !== EMPTY) {
+        continue
+      }
+      const kind = working.kinds[cell]
+      if (kind !== CellKind.Digit && kind !== CellKind.Operator) {
+        continue
+      }
+      empties += 1
+      if (empties > 1) {
+        break
+      }
+      empty = cell
     }
 
-    for (const equation of compiled.parsed.equations) {
-      const empties = assignableAmong(working, equation.cells)
-
-      if (empties.length === 0) {
-        if (equationState(working, equation) !== 'satisfied') {
-          return 'contradiction'
-        }
-        continue
-      }
-      if (empties.length > 1) {
-        continue
-      }
-
-      const cell = empties[0]
-      if (cell === undefined) {
-        continue
-      }
-
-      const candidates = candidatesFor(working, compiled, cell, equation)
-      if (candidates.length === 0) {
+    if (empties === 0) {
+      if (equationState(working, equation) !== 'satisfied') {
         return 'contradiction'
       }
-      if (candidates.length === 1) {
-        const only = candidates[0]
-        if (only === undefined) {
-          continue
-        }
-        // Fixed by a second equation as well as this one, rather than by this
-        // equation alone: that is the `domain` technique rather than `direct`.
-        const otherEquations = (compiled.parsed.equationsByCell[cell] ?? []).filter(
-          (index) => compiled.parsed.equations[index] !== equation,
-        )
-        techniques.add(otherEquations.length > 0 ? 'domain' : 'direct')
-        working.values[cell] = only
-        changed = true
-      }
+      continue
     }
+    if (empties > 1) {
+      continue
+    }
+
+    const only = onlyCandidate(working, compiled, empty, equation)
+    if (only === 'none') {
+      return 'contradiction'
+    }
+    if (only === 'many') {
+      continue
+    }
+
+    // Fixed by a second equation as well as this one, rather than by this
+    // equation alone: that is the `domain` technique rather than `direct`.
+    const crossing = compiled.parsed.equationsByCell[empty] ?? []
+    techniques.add(crossing.length > 1 ? 'domain' : 'direct')
+    working.values[empty] = only
+    touched(empty)
   }
 
   return 'ok'
 }
 
 /**
- * Derives whole numbers whose value follows arithmetically.
+ * The single value that satisfies an equation at its one empty cell.
  *
- * For each `a op b = c` equation with a known operator, exactly one fully unknown
- * number and the other two fully known, computes the missing one and writes its
- * digits. A value that does not fit its cells, carries a leading zero, or
- * contradicts a digit a crossing equation fixed is a contradiction, not a skip.
+ * `'none'` is a contradiction and `'many'` means nothing is forced. Stops at the
+ * second candidate: the caller only ever distinguishes none, one and more.
+ *
+ * Only the side holding the cell is re-evaluated. The other side cannot change —
+ * this is the equation's only empty cell — so it is evaluated once and compared
+ * against, which halves the arithmetic in the solver's hottest loop. A fixed side
+ * that cannot be read at all is a contradiction: no candidate can satisfy an
+ * equation whose other half is already invalid.
  */
-function propagateNumbers(
-  working: Grid,
-  compiled: Compiled,
-  techniques: Set<Technique>,
-): 'ok' | 'changed' | 'contradiction' {
-  let changed = false
-
-  for (const equation of compiled.parsed.equations) {
-    const shape = binaryShape(equation)
-    if (shape === null) {
-      continue
-    }
-
-    const operator = working.values[shape.operatorCell]
-    if (operator === undefined || operator === EMPTY) {
-      continue
-    }
-
-    const terms = [shape.left, shape.right, shape.result] as const
-    const unknown = terms.filter((term) => isFullyUnknown(working, term))
-    if (unknown.length !== 1) {
-      continue
-    }
-    const target = unknown[0]
-    if (target === undefined) {
-      continue
-    }
-
-    const values = terms.map((term) =>
-      term === target ? undefined : (knownValue(working, term) ?? undefined),
-    )
-    // A term that is partially filled reads as unknown here, which would leave
-    // two unknowns and nothing to derive. Require exactly one gap: the target.
-    if (values.filter((value) => value === undefined).length !== 1) {
-      continue
-    }
-    const [a, b, c] = values
-
-    const derived = solveForMissing(operator as Operator, {
-      ...(a === undefined ? {} : { a }),
-      ...(b === undefined ? {} : { b }),
-      ...(c === undefined ? {} : { c }),
-    })
-    if (derived === null) {
-      return 'contradiction'
-    }
-    if (!writeNumberIfConsistent(working, target, derived)) {
-      return 'contradiction'
-    }
-
-    // Derived from two other numbers in this equation, which is arithmetic rather
-    // than a search: `direct`. A cell shared with another equation makes it
-    // `domain`, because the crossing equation is what fixed the inputs.
-    const crossed = target.cells.some(
-      (cell) => (compiled.parsed.equationsByCell[cell] ?? []).length > 1,
-    )
-    techniques.add(crossed ? 'domain' : 'direct')
-    changed = true
-  }
-
-  return changed ? 'changed' : 'ok'
-}
-
-/** Values for `cell` that leave `equation` satisfied, given everything else. */
-function candidatesFor(
+function onlyCandidate(
   working: Grid,
   compiled: Compiled,
   cell: number,
   equation: Equation,
-): number[] {
-  const found: number[] = []
+): number | 'none' | 'many' {
+  const onLeft = equation.cells.indexOf(cell) < equation.leftCellCount
+  const fixedTokens = onLeft ? equation.rightTokens : equation.leftTokens
+  const openTokens = onLeft ? equation.leftTokens : equation.rightTokens
+
+  const fixed = evaluateSideValue(working, fixedTokens)
+  if (!lastSideOk()) {
+    return 'none'
+  }
+
   const original = working.values[cell] ?? EMPTY
+  let found: number | null = null
 
   for (const candidate of compiled.domains[cell] ?? []) {
     working.values[cell] = candidate
-    if (equationState(working, equation) === 'satisfied') {
-      found.push(candidate)
+    if (evaluateSideValue(working, openTokens) !== fixed || !lastSideOk()) {
+      continue
     }
+    if (found !== null) {
+      working.values[cell] = original
+      return 'many'
+    }
+    found = candidate
   }
 
   working.values[cell] = original
-  return found
+  return found ?? 'none'
+}
+
+/**
+ * Derives one equation's missing number, where its value follows arithmetically.
+ *
+ * With a known operator, exactly one fully unknown number and the other two fully
+ * known, the third follows. A value that does not fit its cells, carries a leading
+ * zero, or contradicts a digit a crossing equation fixed is a contradiction, not a
+ * skip.
+ *
+ * Takes one equation rather than sweeping all of them: `propagate` decides which
+ * are worth revisiting. `touched` is called with each cell written, so the
+ * equations crossing it come back onto the work list.
+ */
+function propagateNumbers(
+  working: Grid,
+  compiled: Compiled,
+  index: number,
+  techniques: Set<Technique>,
+  touched: (cell: number) => void,
+): 'ok' | 'changed' | 'contradiction' {
+  const shape = compiled.shapes[index]
+  if (shape === null || shape === undefined) {
+    return 'ok'
+  }
+
+  const operator = working.values[shape.operatorCell]
+  if (operator === undefined || operator === EMPTY) {
+    return 'ok'
+  }
+
+  // Exactly one fully unknown term, and the other two fully known. A partially
+  // filled term is neither, and leaves nothing to derive.
+  let target: NumberToken | null = null
+  const known: { a?: number; b?: number; c?: number } = {}
+  const names = ['a', 'b', 'c'] as const
+  const terms = [shape.left, shape.right, shape.result] as const
+
+  for (let position = 0; position < terms.length; position += 1) {
+    const term = terms[position] as NumberToken
+    if (isFullyUnknown(working, term)) {
+      if (target !== null) {
+        return 'ok'
+      }
+      target = term
+      continue
+    }
+    const value = knownValue(working, term)
+    if (value === null) {
+      return 'ok'
+    }
+    known[names[position] as 'a' | 'b' | 'c'] = value
+  }
+
+  if (target === null) {
+    return 'ok'
+  }
+
+  const derived = solveForMissing(operator as Operator, known)
+  if (derived === null) {
+    return 'contradiction'
+  }
+  if (!writeNumberIfConsistent(working, target, derived)) {
+    return 'contradiction'
+  }
+
+  // Derived from two other numbers in this equation, which is arithmetic rather
+  // than a search: `direct`. A cell shared with another equation makes it
+  // `domain`, because the crossing equation is what fixed the inputs.
+  let crossed = false
+  for (const cell of target.cells) {
+    if ((compiled.parsed.equationsByCell[cell] ?? []).length > 1) {
+      crossed = true
+    }
+    touched(cell)
+  }
+  techniques.add(crossed ? 'domain' : 'direct')
+
+  return 'changed'
 }
 
 /**

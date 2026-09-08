@@ -10,6 +10,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-002: Add the fixed layout table
 - [x] TASK-003: Phase 1 reads a layout instead of searching for a mesh
 - [x] TASK-004: Fill and mask across mixed equation lengths
+- [x] TASK-009: Make the uniqueness check stop re-deriving what did not change
 - [ ] TASK-005: Re-measure Hard and reset its mask targets
 - [ ] TASK-006: Render an 11 x 11 board on a phone
 - [ ] TASK-007: The five named palettes and their previews
@@ -114,9 +115,71 @@ when every equation on a board shared one pattern.
 Done when: 60 seeds per difficulty generate with zero failures in the fast suite, and
 every equation on every board satisfies its difficulty's constraints.
 
-## TASK-005: Re-measure Hard and reset its mask targets
+## TASK-009: Make the uniqueness check stop re-deriving what did not change
 
 Depends on: TASK-004
+Required by: TASK-005
+
+Appended after TASK-004 measured Hard at 3.5 s a board and a CPU profile said where
+it goes. Masking is 99.3% of that time, the fill 0.7%, and inside masking about 55%
+of all time is spent re-evaluating equations that did not change: `propagate` walks
+all 14 equations on every pass, and one assignment touches at most two of them.
+
+Profile over three Hard boards, 5,977 ms, by self time: `evaluateSide` 22.3%,
+`propagate` 13.4%, `isAssignable` 10.2%, `propagateNumbers` 9.8%, `equationState`
+8.6%, `search` 7.5%, `readNumber` 6.5%, `readTerms` 4.3%, `knownDigitCount` 4.1%.
+689,138 search nodes over 130 checks, 5,301 nodes a check, 8.84 us a node.
+
+Five changes, in profile order. None changes what the solver decides:
+
+1. **Propagate only the equations a change touched.** Seed the work list with the
+   assigned cell's equations, and add an equation back when one of its cells is
+   written. Propagation is monotone, so the fixed point is the same one.
+2. **Count empty cells inline.** `assignableAmong` allocates an array to answer
+   "none, one, or more than one", per equation per pass.
+3. **Precompute `binaryShape` per equation at compile time.** It depends only on
+   cell kinds and is currently recomputed 9.9 million times a board.
+4. **Reuse the snapshot buffer in `search`.** A fresh `Int8Array` per candidate per
+   node is millions of allocations; a buffer per recursion depth is none.
+5. **Precompute each equation's two sides.** `equationState` calls `findIndex` and
+   allocates two `slice`s on every call, and it is called from four places in the
+   solver's hot loop.
+
+Do this **before** TASK-005. A faster solver settles checks that used to exhaust the
+node budget, so it changes achieved density — measuring first would mean measuring
+twice.
+
+Expect the generated puzzles to change for a given seed: a mask that was refused
+because a check could not be settled cheaply may now be accepted. Plan section 5.7
+already accepts that a generator change alters dailies nobody has opened, and the
+bundled starter board is regenerated when it does.
+
+Done when: the suite passes unchanged, determinism still holds, and the measured
+cost per Hard board is recorded here and in the learnings file.
+
+**Done. Hard went from 3,471 ms a board to 772 ms, 4.5x, and the suite from 34
+seconds to 14.** Easy and Medium are unchanged at 7 ms and 4 ms; they were never
+slow. Achieved density is unchanged, and puzzles are byte-identical for the same
+seed — checked by generating from both trees and diffing, so the warning about
+changed dailies did not apply in the end.
+
+A sixth change was needed and is the one that paid best: when an equation has a
+single empty cell, only the side holding that cell can change, so the other is
+evaluated once and compared against rather than re-evaluated per candidate.
+
+One of the five failed and was reverted. Reusing module-level scratch arrays in
+`evaluateSide` was *slower* than the allocation it replaced, 2,711 ms to 3,436 ms.
+Removing the arrays entirely — three local numbers carrying the running total, the
+pending operator and the multiplicative chain — is what worked. Recorded in
+`.learnings/generation-measurements.md`.
+
+What is left is flat: no single function is above 20% of the remaining time. Going
+further needs fewer search nodes rather than cheaper ones, which means stronger
+propagation, and that would change which puzzles a seed produces.
+
+## TASK-005: Re-measure Hard and reset its mask targets
+
+Depends on: TASK-004, TASK-009
 Required by: TASK-008
 
 `plan.md` sections 2.7 and 5.6. Hard's 50% and 30% were measured on a 7 x 7 with

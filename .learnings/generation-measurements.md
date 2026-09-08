@@ -159,3 +159,59 @@ is written.
 2 ms against 18 ms and 1094 ms for the grades above it, and those grades do far more
 masking. The reason Medium is cheap is that its rule is checked incrementally; see
 [enforce-acceptance-where-the-work-happens.md](enforce-acceptance-where-the-work-happens.md).
+
+## The solver was spending 55% of its time re-deriving equations nobody had touched, 2026-09-08
+
+At M8, with the fixed layouts in place, Hard cost **3,471 ms a board** against Easy's
+7 ms and Medium's 4 ms. The instinct that a generator of this shape should be far
+quicker turned out to be right, and a CPU profile said exactly where the time went.
+
+**Masking is effectively all of it.** Over five boards: layout and widths 3 ms, fill
+97 ms, masking 13,212 ms. The fill is 0.7% of a board, so a fill that took no time at
+all would save 3% of one. Two reorderings of the fill were tried anyway and both were
+worse than the breadth-first order already in place — most-constrained-first filled 0
+of 60 boards and freest-first 3 of 60, against 5 of 60.
+
+**Inside masking, 689,138 search nodes over 130 uniqueness checks, at 8.84 us a
+node.** By self time: `evaluateSide` 22.3%, `propagate` 13.4%, `isAssignable` 10.2%,
+`propagateNumbers` 9.8%, `equationState` 8.6%, `search` 7.5%, `readNumber` 6.5%,
+`readTerms` 4.3%. About 55% of everything was equation evaluation, and most of it was
+redundant: `propagate` walked all 14 equations on every pass, while one assignment
+touches at most two.
+
+Five changes, none of which alters what the solver decides. Measured on the same
+three boards, 5,977 ms before:
+
+| change | after |
+|---|---|
+| propagate only the equations a change touched | |
+| count empty cells inline instead of allocating an array | |
+| precompute `binaryShape` per equation at compile time | |
+| reuse the snapshot buffer per recursion depth | 2,711 ms |
+| evaluate a side without allocating terms | 2,069 ms |
+| compare against the fixed side instead of re-evaluating both | 1,325 ms |
+
+Hard went from **3,471 ms to 772 ms a board**, 4.5x, and the whole test suite from 34
+seconds to 14. Easy and Medium are unchanged at 7 ms and 4 ms — they were never slow.
+Achieved density is unchanged at 0.48 digits and 0.29 operators, and the puzzles are
+**byte-identical** for the same seed, which was checked by generating from both trees
+and diffing.
+
+Three things worth carrying.
+
+**A shared scratch array was slower than the allocation it replaced.** The first
+attempt at an allocation-free `evaluateSide` kept the two-pass structure and reused
+module-level arrays instead of building a term list. It made that function *slower* —
+2,711 ms to 3,436 ms. Short-lived objects in the nursery are cheap; writing through a
+shared growable array is not. What worked was removing the arrays entirely and
+carrying the running total, the pending operator and the multiplicative chain in three
+local numbers.
+
+**Halving the work beat micro-optimising it.** The single largest win was noticing
+that when an equation has one empty cell, only the side holding that cell can change,
+so the other is evaluated once rather than ten times. That is a change of about
+fifteen lines and it took a third off the remaining time.
+
+**Profile the worker, not the runner.** `node --cpu-prof vitest run` profiles the main
+process and reports module compilation. The flags have to reach the test worker:
+`vitest run --pool=forks --execArgv="--cpu-prof" --execArgv="--cpu-prof-dir=..."`.

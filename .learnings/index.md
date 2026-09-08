@@ -33,7 +33,7 @@ true on one machine only. See
   because fewer blanks make a puzzle shorter rather than more logical. Read before
   adding an acceptance rule to generation, or before tuning parameters to reach a
   property.
-- [generation-measurements.md](generation-measurements.md) — MathsCross's own measured cost per difficulty, and the four decisions that dominated it: the solver cannot fill an empty grid, derive the widest term, cell-count filtering admits impossible patterns, and variable order decides whether uniqueness checking is feasible. Also why operators must be masked before digits. Read before changing the attempt cap, the node budget, the masking order, or any density target.
+- [generation-measurements.md](generation-measurements.md) — MathsCross's own measured cost per difficulty, and the four decisions that dominated it: the solver cannot fill an empty grid, derive the widest term, cell-count filtering admits impossible patterns, and variable order decides whether uniqueness checking is feasible. Also why operators must be masked before digits, and where the time goes inside a board: the fill is 0.7% of a Hard board and masking is the rest. Read before changing the attempt cap, the node budget, the masking order, any density target, or before optimising anything in the engine.
 - [generation-cost-follows-rejection-rate.md](generation-cost-follows-rejection-rate.md)
   — cost is driven by how many seeds a difficulty rejects, not by how hard it plays,
   so the hardest grade need not be the slowest; and an attempt cap set from intuition
