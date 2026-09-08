@@ -15,7 +15,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-006: Render an 11 x 11 board on a phone
 - [x] TASK-007: The five named palettes and their previews
 - [ ] TASK-008: Documentation and store listing
-- [ ] TASK-010: The header takes 86px of a landscape phone
+- [x] TASK-010: The header takes 86px of a landscape phone
 
 ---
 
@@ -316,3 +316,12 @@ Also here, and smaller: the version line at the foot pushes the document 22 px p
 
 Done when: a landscape Hard board is measured again and the figure recorded, or the
 change is declined and the reason recorded.
+
+**Done.** The title is 1.25rem in the side-by-side layout, which takes the header
+from 86px to 54px, and the board's landscape height budget drops from 9.5rem to
+7.5rem to spend what that freed. Measured at 844 x 390: the board is 270px and its
+cells 23.5px, against 19.3px before TASK-006 and 20.5px after it. At 740 x 360 it is
+240px and 20.7px.
+
+The version line still costs a 22px scroll and is kept: it is a footer rather than
+gameplay, and it is the first thing a bug report needs.

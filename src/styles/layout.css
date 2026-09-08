@@ -164,6 +164,15 @@ body {
     flex-shrink: 0;
   }
 
+  /* A landscape phone is 390px tall, and the title was taking 86px of it — more
+     than a fifth of the screen, above a board that wanted every pixel. At 1.25rem
+     it takes 44px, and the board grows by the difference. The title is still the
+     first thing on the screen; it does not need to be the largest thing on it when
+     the screen is on its side. */
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
   /* One width, whichever pad is showing. Matches the pad's own 22rem cap, so the
      digits fill it exactly and the operators are centred within the same box. */
   .keypad {
@@ -224,16 +233,16 @@ body {
    the board fell back on its 224px floor and gave 19.3px cells — with 8px of the
    page hanging off the bottom regardless.
 
-   9.5rem is what sits above and below it there: 12px of page padding, an 86px
-   header, a 20px status line, the gaps between them, and 12px at the foot. The
-   header is most of that, and shrinking it in landscape is the one change that
-   would buy this board a real amount of room.
+   7.5rem is what sits above and below it there: 12px of page padding, a 54px header,
+   a 20px status line, the gaps between them, and 12px at the foot. The header was
+   86px of that until the rule above shrank the title, which is where most of this
+   board's room came from.
 
    This has to come after the rule it overrides: both are single-class selectors,
    so source order is what decides. Plan section 8.2. */
 @media (min-aspect-ratio: 1/1) and (min-width: 45rem) {
   .board {
-    width: min(100%, max(var(--board-floor), calc(100dvh - 9.5rem)), var(--board-cap));
+    width: min(100%, max(var(--board-floor), calc(100dvh - 7.5rem)), var(--board-cap));
   }
 }
 

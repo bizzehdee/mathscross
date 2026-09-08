@@ -1358,9 +1358,14 @@ Follow `src/styles/layout.css` from the sibling:
   row's automatic minimum is its content.
 - **Side by side, the board gets its own height budget.** The 20 rem the stacked rule
   subtracts is the keypad, controls and clock sitting *under* the board; in landscape
-  they sit beside it. 9.5 rem is what is actually above and below there, and most of
-  it is the header. Shrinking the header in landscape is the one change that would
-  buy that board a real amount of room, and it is not made here.
+  they sit beside it. 7.5 rem is what is actually above and below there.
+- **The title is 1.25 rem in landscape, not 2 rem.** It was taking 86 px of a 390 px
+  screen — more than a fifth of it — above a board that wanted every pixel. At 54 px
+  the header still reads first; it does not also have to be the largest thing on a
+  screen turned on its side. Hard's cells went from 19.3 px to 23.5 px across that
+  change and the height budget above it.
+- **The version line still costs a 22 px scroll in landscape**, at every difficulty.
+  It is a footer, not gameplay, and it is what a bug report needs, so it stays.
 - **The digit pad is two rows of five.** Flex wrapping gave six then four, which reads
   as a row that ran out rather than a pad. Five columns is the same two rows the pad
   already reserves height for, evenly. The operator pad stays flex: four keys, one
