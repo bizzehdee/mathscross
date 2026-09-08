@@ -68,21 +68,23 @@ jobs:
         working-directory: native
         run: npx cordova platform add android --no-save
 
-      # The game makes no network requests, and the absence of the permission is
-      # what makes that checkable from the store listing. The hook that removes it
-      # throws rather than warning, so a failure fails the build — but assert it
-      # here too, because this is the property a reviewer would actually check.
-      - name: Assert the app requests no INTERNET permission
+      # INTERNET is the only permission the app may declare, and it must be there:
+      # the WebView serves the bundle from https://localhost and refuses an
+      # http(s) load without it, which is how the first submission came to open on
+      # a blank screen. Anything beyond it is a permission the game does not use
+      # and a question on the Play listing nobody wants to have to answer.
+      - name: Assert the app declares INTERNET and nothing else
         working-directory: native
         run: |
           MANIFEST=platforms/android/app/src/main/AndroidManifest.xml
-          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-            echo "The manifest still requests INTERNET. Plan section 9.4 forbids it." >&2
-            grep -n 'uses-permission' "$MANIFEST" >&2
+          declared=$(grep -o 'android:name="android.permission.[A-Z_]*"' "$MANIFEST" \
+            | sed 's/.*permission\.\([A-Z_]*\)"/\1/' | sort -u | tr '\n' ' ')
+          if [ "$declared" != "INTERNET " ]; then
+            echo "Expected exactly INTERNET, found: ${declared:-(none)}" >&2
+            grep -n 'uses-permission' "$MANIFEST" >&2 || true
             exit 1
           fi
-          echo "No INTERNET permission. Permissions declared:"
-          grep -n 'uses-permission' "$MANIFEST" || echo "  (none)"
+          echo "Permissions declared: INTERNET only."
 
       # The installed icon must be the one on the store listing; Play rejects a
       # mismatch. Cordova copies the files named in config.xml into the platform's

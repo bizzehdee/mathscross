@@ -62,6 +62,11 @@ true on one machine only. See
   `https://localhost`, not `file://`, or `localStorage` is not durable and there is
   no secure context. The failure is silent. Read before touching `native/config.xml`
   or the native base path.
+- [https-origin-needs-internet-permission.md](https-origin-needs-internet-permission.md)
+  — a webview will not load an `https://localhost` origin without the INTERNET
+  permission, so stripping the permission ships an app that opens to a blank screen;
+  Play rejected the first submission for it. Read before touching manifest
+  permissions, the shell's origin, or an offline claim in the store text.
 - [ios-storage-eviction.md](ios-storage-eviction.md) — iOS deletes all
   script-writable storage after 7 days without interaction, IndexedDB included, so
   switching to IndexedDB does not fix it; home-screen installs are exempt. Read

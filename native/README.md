@@ -33,20 +33,27 @@ npm run build:aab             # or build:android for a sideloadable APK
 An unsigned build is fine for checking that the app runs. It cannot be uploaded to
 Play.
 
-## The INTERNET permission is removed
+## The INTERNET permission must stay
 
-`hooks/remove-internet-permission.js` strips `android.permission.INTERNET` from the
-generated manifest after every prepare. The game makes no network requests, and the
-absence of the permission is what turns "works offline" from a claim into something
-a player can verify from the store listing.
+`config.xml` serves the bundle from `https://localhost` through Android's asset
+loader, and a WebView refuses an http(s) load when the app does not hold
+`android.permission.INTERNET` — the request never reaches the interceptor, so the app
+opens to a blank screen and nothing in the build complains.
 
-The hook throws rather than warning if it cannot do its job. A silent no-op would
-ship the permission and nobody would notice.
+An earlier version of this shell stripped the permission with an `after_prepare`
+hook. Play rejected the submission with "your app does not open or load". The hook is
+gone; do not reintroduce it. `../.learnings/https-origin-needs-internet-permission.md`
+has the detail.
 
-Check it after a build:
+Offline is enforced by what the app cannot reach, not by the permission list: no
+`<access>` and no `<allow-navigation>`, and `connect-src 'none'` in the CSP. The store
+text claims no network requests rather than an empty permission list.
+
+Check after a build that INTERNET is there and is the only one:
 
 ```bash
-grep -c INTERNET platforms/android/app/src/main/AndroidManifest.xml   # expect 0
+grep -o 'android.permission.[A-Z_]*' \
+  platforms/android/app/src/main/AndroidManifest.xml | sort -u   # expect INTERNET only
 ```
 
 ## The launcher icon
@@ -136,7 +143,7 @@ release, check on a device:
 - `localStorage` survives an app restart **and an upgrade** — the origin
   preferences in `config.xml` are what make that work, and the failure is silent
   (see `../.learnings/native-shell-origin.md`);
-- the manifest has no INTERNET permission;
+- the manifest declares INTERNET and no other permission;
 - the launcher icon on the home screen is this app's mark, not Cordova's;
 - rotation does not reload the WebView or lose an in-progress board;
 - a tap on a board cell registers with no perceptible delay.

@@ -60,15 +60,6 @@
     <preference name="AutoHideSplashScreen" value="true" />
     <preference name="SplashScreenDelay" value="0" />
 
-    <!--
-      Strips the INTERNET permission from the generated manifest.
-
-      cordova-android adds it by default. The game is offline by design, and the
-      absence of the permission is what turns that from a claim into something a
-      player can verify from the store listing. Plan section 9.4.
-    -->
-    <hook type="after_prepare" src="hooks/remove-internet-permission.js" />
-
     <platform name="android">
         <!--
           The launcher icon. Without these the build ships cordova-android's
@@ -97,6 +88,18 @@
 
           The failure is silent — nothing breaks at build time or on first run,
           only after an upgrade. See .learnings/native-shell-origin.md.
+        -->
+        <!--
+          The INTERNET permission cordova-android declares by default must stay.
+          The asset loader below serves the bundle over an https origin, and the
+          WebView refuses an http(s) load outright when the app does not hold the
+          permission — the page never reaches the interceptor, so the app opens to
+          a blank screen. Play rejected the first submission for exactly that.
+          See ../.learnings/https-origin-needs-internet-permission.md.
+
+          It is a permission to reach the network, not a use of it: there is no
+          <access> or <allow-navigation>, and the CSP in src/index.html sets
+          connect-src 'none'. Plan section 9.4.
         -->
         <preference name="AndroidInsecureFileModeEnabled" value="false" />
         <preference name="scheme" value="https" />

@@ -116,7 +116,8 @@ the following in release 1:
 
 1. The mechanic passed the M0.5 playtest in section 14.
 2. The web app is playable with no network connection after first load.
-3. The Android app requests no `INTERNET` permission.
+3. The Android app declares `INTERNET` and no other permission, makes no network
+   request, and is enforced in that by the CSP rather than by the permission list.
 4. The first board on a fresh install appears with no wait, per section 5.8.
 5. The main thread never blocks on generation. A generating state appears within
    150 ms, reports progress, and can be cancelled.
@@ -1505,8 +1506,16 @@ Do not add one without stating the current problem it solves.
 
 ### 9.4 Android configuration
 
-- Remove the `INTERNET` permission from the generated manifest. The game is offline
-  by design, and the absence of the permission proves it.
+- Keep the `INTERNET` permission cordova-android declares, and allow no other. The
+  webview serves the bundle from `https://localhost` through the asset loader and
+  refuses an http(s) load without the permission, so stripping it ships an app that
+  opens to a blank screen. It did: the first Play submission was rejected as "does
+  not open or load". See `.learnings/https-origin-needs-internet-permission.md`.
+
+  Offline is enforced instead by what the app cannot reach: no `<access>` and no
+  `<allow-navigation>` in `config.xml`, and `connect-src 'none'` in the CSP below,
+  which the browser enforces at runtime. The store text claims no network requests,
+  not an empty permission list — section 11.3.
 - Set a Content-Security-Policy meta tag in `src/index.html` forbidding remote
   script, style, and connection sources.
 - Target the API level and build tools that the pinned `cordova-android` version
@@ -1677,9 +1686,10 @@ puzzle game is both a policy risk and the fastest route to one-star reviews.
 MathsCross has an unusually easy set of declarations, and the listing should say so
 plainly because it is a genuine differentiator:
 
-- **Data Safety: no data collected and no data shared.** This is trivially true and
-  provable — the app requests no `INTERNET` permission per section 9.4, so it cannot
-  transmit anything. Answer the questionnaire accordingly.
+- **Data Safety: no data collected and no data shared.** True because the app makes
+  no request anywhere and the CSP forbids one; the `INTERNET` permission is present
+  because the webview needs it to load its own bundle, per section 9.4, and must not
+  be cited on the listing as evidence. Answer the questionnaire accordingly.
 - **Content rating:** general audience. The questionnaire has no interactive
   elements, user-generated content, or ads to declare. Section 9.4 already removed
   the families declaration along with the Kids tier.
@@ -2055,14 +2065,15 @@ Each milestone ends with tests passing in CI.
   misdiagnosis at M3.
 - **M6 — Cordova and Android. Written, not verified.** `native/config.xml` with the
   origin preferences from section 9.2, zero plugins, no orientation lock,
-  `native/hooks/remove-internet-permission.js`, `native/README.md`, and
+  `native/README.md`, and
   `release.yml` producing a signed AAB and APK with the `versionCode` scheme, PKCS12
   signing through `build.json`, and a dormant Play publish step.
 
-  The permission hook is verified against a realistic generated manifest: it removes
-  `INTERNET`, leaves every other element intact, is idempotent, and throws rather
-  than passing silently if the element shape changes. `release.yml` asserts the
-  absence independently, because that is the property a reviewer would check.
+  M6 also stripped the `INTERNET` permission with an `after_prepare` hook. That is
+  gone: Play rejected the first submission with "your app does not open or load",
+  because a webview without the permission will not load an https origin and the
+  asset loader never sees the request. `release.yml` now asserts that `INTERNET` is
+  present and is the only permission declared.
 
   **The shell itself has never been built.** There is no Android SDK on the
   development machine, so `config.xml` and the workflow are written from this plan

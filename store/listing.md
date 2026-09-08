@@ -21,13 +21,19 @@ MathsCross
 draft of this line was 82 and would have been rejected at the paste.
 
 ```
-Offline maths crosswords solvable by logic. No adverts, accounts or internet.
+Offline maths crosswords solvable by logic. No adverts, accounts or tracking.
 ```
 
 The things that actually distinguish it, in the order they matter. "Solvable by
 logic" is the claim a parent choosing a maths game cares about most, and it is
-enforced rather than asserted. "Offline" follows because it is the promise the app
-can prove — it requests no internet permission at all.
+enforced rather than asserted. "Offline" follows because every puzzle is generated
+on the device and the app makes no network requests at all.
+
+The line said "no internet" until the first submission. The app does hold the
+INTERNET permission — the WebView will not load the bundle from its own https
+origin without it, per section 9.4 — so a claim resting on the permission list
+would have been false. What is true is that nothing is ever sent, and that is what
+the text now says.
 
 ## Full description
 
@@ -38,8 +44,8 @@ A crossword made of sums. Fill the grid so that every row and column reads as a
 correct equation, across and down at the same time.
 
 Every puzzle is generated on your device, so there is nothing to download and
-nothing to wait for. The app requests no internet permission whatsoever — not for
-the first puzzle, and not for the ten thousandth.
+nothing to wait for. The app makes no network requests at all — not for the first
+puzzle, and not for the ten thousandth.
 
 SOLVABLE BY LOGIC, NOT BY GUESSING
 
@@ -88,7 +94,7 @@ NO NONSENSE
 • No in-app purchases.
 • No accounts and no sign-in.
 • No analytics, no tracking, no data collection of any kind.
-• No internet permission, so none of the above is possible even by accident.
+• No network requests of any kind, so nothing you do here leaves your phone.
 
 Works on a plane, on the underground, and on a phone that has never been online.
 ```
@@ -118,9 +124,12 @@ listing because it is a genuine differentiator.
 | Is all of the user data collected by your app encrypted in transit? | Not applicable — no data leaves the device |
 | Do you provide a way for users to request that their data be deleted? | Not applicable — nothing is collected |
 
-This is provable rather than merely asserted: the app requests no `INTERNET`
-permission, so it cannot transmit anything. `release.yml` fails the build if that
-permission reappears.
+This is not a promise to keep, it is a description of code that has nowhere to send
+anything: no request is made anywhere in the app, `config.xml` grants no `<access>`
+or `<allow-navigation>`, and the CSP in `src/index.html` sets `connect-src 'none'`,
+which the browser enforces. `release.yml` fails the build if any permission beyond
+`INTERNET` — which the webview needs to load the bundle from its own origin, per
+section 9.4 — appears in the manifest.
 
 Puzzle progress, statistics and settings are stored **on the device only**, in the
 browser storage of the app's own webview. Clearing the app's data removes them, and
