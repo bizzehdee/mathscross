@@ -118,3 +118,32 @@ And the verification method: read `getBoundingClientRect()` before and after the
 interaction, then toggle the candidate rule off in the browser and re-measure. That
 turns "it looks like it jumps" into two numbers and a cause, and it is the only way
 found so far to check a layout rule that no test can see.
+
+## Measuring the running app without Playwright, 2026-09-09
+
+The repository has no browser automation dependency, and the three defects above were
+found by looking at the running app. This is how to look at it with numbers rather
+than eyes, using the Chrome that is already installed:
+
+```
+google-chrome --headless=new --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-prof about:blank
+```
+
+Then drive it over the DevTools Protocol with the `ws` package that is already in
+`node_modules`: `Emulation.setDeviceMetricsOverride` for the viewport,
+`Page.navigate`, `Runtime.evaluate` for `getBoundingClientRect()` and
+`getComputedStyle`, and `Page.captureScreenshot` with a `clip` to zoom in on one row.
+
+What it caught at M8, none of which a jsdom test could have:
+
+- An 11 x 11 board 224 px wide and 294 px tall in landscape, its cells 20 x 27
+  rectangles and its last two rows off the screen, because a grid row's automatic
+  minimum is its content and the digit had a font-size floor.
+- A 31.1 px cell where the plan claimed 32, which is what prompted shrinking the gap.
+- The board holding still — 0 px moved, 0 px resized — when the entry pad switches at
+  the new size, which is the M3 defect re-checked rather than assumed.
+
+Measure the property, not the appearance: `bottom > innerHeight` for what falls off,
+`scrollWidth > clientWidth` for text that does not fit its cell, and two rects around
+an interaction for anything that moves.

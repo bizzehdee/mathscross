@@ -12,9 +12,10 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-004: Fill and mask across mixed equation lengths
 - [x] TASK-009: Make the uniqueness check stop re-deriving what did not change
 - [x] TASK-005: Re-measure Hard and reset its mask targets
-- [ ] TASK-006: Render an 11 x 11 board on a phone
+- [x] TASK-006: Render an 11 x 11 board on a phone
 - [ ] TASK-007: The five named palettes and their previews
 - [ ] TASK-008: Documentation and store listing
+- [ ] TASK-010: The header takes 86px of a landscape phone
 
 ---
 
@@ -230,6 +231,29 @@ Depends on: TASK-003
 Done when: a Hard board is playable in a 390 x 844 viewport with no horizontal
 scroll, measured rather than eyeballed, and the movement assertion still passes.
 
+**Done, measured in a real browser rather than in jsdom.** Portrait 390 x 844: a
+366 px board, 32.2 px cells, 19.2 px digits, no horizontal scroll, keypad keys still
+44 px, and the board moves 0 px and resizes 0 px when the entry pad switches.
+
+Three defects that only a browser could have shown, all fixed:
+
+- Landscape at 844 x 390 rendered the board 224 px wide and **294 px tall**, its
+  cells 20 x 27 rectangles with the last two rows off the screen. A grid row's
+  automatic minimum is its content, and the digit had a font-size floor, so the rows
+  refused to shrink to the square the aspect-ratio asked for.
+- The cell font was sized from the board's *column count* against a viewport guess.
+  It is now sized from the board's own width through a container query, so it is a
+  little over half a cell at any size in either orientation.
+- The landscape board used the stacked layout's height budget, which subtracts a
+  keypad that in landscape is beside it rather than under it. It was falling back on
+  its 224 px floor and hanging 8 px off the bottom regardless.
+
+Landscape is still the tight case at 20.5 px cells, and the header is most of what is
+eating the room. Shrinking it there is a design change rather than a fix, so it is
+not made here — TASK-010.
+
+The digit pad is also now two rows of five rather than six and four.
+
 ## TASK-007: The five named palettes and their previews
 
 `plan.md` section 8.1. Football, space, sweets, jungle and ocean, taken from
@@ -260,3 +284,21 @@ Depends on: TASK-001, TASK-003, TASK-005, TASK-007
   built, and correct them where they do not.
 
 Done when: no user-facing text describes four difficulties or a 9 x 9 board.
+
+## TASK-010: The header takes 86px of a landscape phone
+
+At 844 x 390 the header is 86 px tall, and it is the largest single reason the board
+there is 238 px rather than 300. The board sits under a full-size title in a viewport
+390 px tall, and the room the title takes is room the grid does not get.
+
+A smaller title in the side-by-side layout would buy roughly 40 px of board, which is
+about 3.5 px a cell at Hard. That is a visible change to every screen in landscape, so
+it is a design decision rather than a defect fix, and it wants looking at rather than
+calculating.
+
+Also here, and smaller: the version line at the foot pushes the document 22 px past a
+390 px viewport, so landscape scrolls slightly at every difficulty. It predates the
+11 x 11 board.
+
+Done when: a landscape Hard board is measured again and the figure recorded, or the
+change is declined and the reason recorded.

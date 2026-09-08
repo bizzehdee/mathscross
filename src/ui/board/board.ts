@@ -36,7 +36,10 @@ export interface BoardCallbacks {
 export function createBoardView(state: GameState, callbacks: BoardCallbacks): BoardView {
   const size = state.board.size
   const element = document.createElement('div')
-  element.className = 'board'
+  // Hard's 11 columns are dense enough that the gaps cost more than they convey.
+  // Measured on a 390px viewport: 2px gaps give a 31.1px cell, 1px gives 32.2px.
+  // Plan section 8.2.
+  element.className = size > 7 ? 'board board--dense' : 'board'
   element.setAttribute('role', 'grid')
   element.setAttribute('aria-label', `MathsCross board, ${size} by ${size}`)
   element.style.setProperty('--board-size', String(size))

@@ -200,20 +200,62 @@ body {
      `max()` is the floor that stops that. Found by looking at the running app in a
      short pane; no unit test would have shown it. */
   --board-floor: 14rem;
+  --board-gap: 2px;
+  /* A query container, so a cell can size its digit from the board's own width
+     rather than from a guess about the viewport. See `.cell`. */
+  container-type: inline-size;
   display: grid;
   grid-template-rows: repeat(var(--board-size), 1fr);
-  gap: 2px;
+  gap: var(--board-gap);
   width: min(100%, max(var(--board-floor), calc(100dvh - 20rem)), var(--board-cap));
   aspect-ratio: 1;
-  padding: 2px;
+  padding: var(--board-gap);
   background: var(--colour-line);
   border-radius: var(--radius);
+}
+
+/* Side by side, the board has a different height budget.
+
+   The 20rem the rule above subtracts is the keypad, the controls and the clock
+   stacked *under* the board. Side by side they sit next to it, and the only
+   things above it are the header and the status line.
+
+   Measured on an 844x390 landscape Hard board: the stacked budget left 70px, so
+   the board fell back on its 224px floor and gave 19.3px cells — with 8px of the
+   page hanging off the bottom regardless.
+
+   9.5rem is what sits above and below it there: 12px of page padding, an 86px
+   header, a 20px status line, the gaps between them, and 12px at the foot. The
+   header is most of that, and shrinking it in landscape is the one change that
+   would buy this board a real amount of room.
+
+   This has to come after the rule it overrides: both are single-class selectors,
+   so source order is what decides. Plan section 8.2. */
+@media (min-aspect-ratio: 1/1) and (min-width: 45rem) {
+  .board {
+    width: min(100%, max(var(--board-floor), calc(100dvh - 9.5rem)), var(--board-cap));
+  }
+}
+
+/* Eleven columns on a phone. A 390px viewport gives the board 366px, which is a
+   31.1px cell at a 2px gap and 32.2px at 1px — and a cell the finger has to hit is
+   worth more than a line it barely sees. Applied by column count rather than by a
+   media query: the board is the thing that ran out of room, not the viewport.
+   Plan section 8.2. */
+.board--dense {
+  --board-gap: 1px;
 }
 
 .board__row {
   display: grid;
   grid-template-columns: repeat(var(--board-size), 1fr);
-  gap: 2px;
+  gap: var(--board-gap);
+  /* A grid row's automatic minimum is its content, so without this the rows
+     refuse to go below the height of the digit in them and the board grows past
+     the square its aspect-ratio asked for. Measured on an 844x390 landscape Hard
+     board: a 224px-wide board came out 294px tall, its cells 20x27 rectangles,
+     and the bottom two rows fell off the screen. */
+  min-height: 0;
 }
 
 .cell {
@@ -228,7 +270,13 @@ body {
   background: var(--colour-cell);
   color: var(--colour-ink);
   font: inherit;
-  font-size: clamp(0.75rem, calc(28rem / var(--board-size)), 1.6rem);
+  /* Sized from the board, not from the viewport. `cqw` is one hundredth of the
+     board's own width, so `100cqw / --board-size` is a cell and the digit is a
+     little over half of it — the same proportion at 5 columns and at 11, in
+     portrait and in landscape. The cap is what keeps an Easy cell from being all
+     digit; there is deliberately no floor, because a floor is what made the text
+     taller than the cell holding it. */
+  font-size: min(1.6rem, calc(58cqw / var(--board-size)));
   font-variant-numeric: tabular-nums;
   line-height: 1;
   /* Removes the WebView's double-tap-zoom wait, kills the grey flash, and stops
@@ -383,8 +431,15 @@ body {
   min-height: calc(2 * var(--tap-min) + var(--space-2));
 }
 
-.keypad__pad--digits .keypad__key {
-  flex: 1 1 3rem;
+/* Ten digits as two rows of five.
+
+   Flex wrapping put six on the first row and four on the second, which reads as
+   a row that ran out rather than a pad. A five-column grid is the same two rows
+   the min-height above reserves, evenly. The operator pad stays flex: it has four
+   keys and one row, and forcing it into the same grid would stretch them. */
+.keypad__pad--digits {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .keypad__key {

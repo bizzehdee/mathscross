@@ -1328,13 +1328,38 @@ Follow `src/styles/layout.css` from the sibling:
   height.
 - Size all controls from `--tap-min`, which is 44 px everywhere.
 - **The 44 px floor applies to controls, not to board cells at Hard.** Eleven columns
-  at 44 px is 484 px, and a portrait phone is 390 px wide. Hard's cells therefore
-  shrink to fit, to a floor of 32 px, and the keypad, the header and every button
-  stay at 44 px. This is a real accessibility cost and it is accepted rather than
-  hidden: the board is fully operable from the keypad and the roving tabindex, which
-  is where a player with a large touch target problem is already better served. If a
-  32 px cell proves unusable on a device, the retreat is Hard's grid size, and it is
-  listed in section 5.6 as the last of the four.
+  at 44 px is 484 px and a portrait phone is 390 px wide, so Hard's cells shrink to
+  fit while the keypad, the header and every button stay at 44 px. Measured in a real
+  browser at 390 x 844: a 366 px board, **32.2 px cells**, no horizontal scroll, and
+  the board neither moves nor resizes when the entry pad switches. Landscape at
+  844 x 390 is the tighter case at 20.5 px.
+
+  This is a real accessibility cost and it is accepted rather than hidden: the board
+  is fully operable from the keypad and the roving tabindex, which is where a player
+  who needs a large touch target is better served anyway. If a 32 px cell proves
+  unusable on a device, the retreat is Hard's grid size, listed in section 5.6 as the
+  last of the four.
+- **Gaps shrink before cells do.** A board of more than seven columns uses a 1 px gap
+  rather than 2 px, which is the difference between a 31.1 px cell and a 32.2 px one
+  at Hard. A cell the finger has to hit is worth more than a line it barely sees.
+  Applied by column count, not by a media query: the board is what ran out of room.
+- **A digit is sized from the board, not from the viewport.** The board is a query
+  container and a cell's font is `58cqw / --board-size`, capped at 1.6rem — a little
+  over half a cell at any size, in either orientation. The rule it replaced had a
+  0.75rem *floor*, and a floor is what made the text taller than the cell holding it:
+  at 844 x 390 the row tracks refused to shrink below the digit, so an 11 x 11 board
+  came out 224 px wide and 294 px tall with 20 x 27 rectangles for cells and its last
+  two rows off the bottom of the screen. Grid rows need `min-height: 0` as well; a
+  row's automatic minimum is its content.
+- **Side by side, the board gets its own height budget.** The 20 rem the stacked rule
+  subtracts is the keypad, controls and clock sitting *under* the board; in landscape
+  they sit beside it. 9.5 rem is what is actually above and below there, and most of
+  it is the header. Shrinking the header in landscape is the one change that would
+  buy that board a real amount of room, and it is not made here.
+- **The digit pad is two rows of five.** Flex wrapping gave six then four, which reads
+  as a row that ran out rather than a pad. Five columns is the same two rows the pad
+  already reserves height for, evenly. The operator pad stays flex: four keys, one
+  row, and a grid would stretch them.
 - Give `:focus-visible` a 3 px accent outline.
 - **The board must not move or resize when the selection changes.** Reported by a
   player: clicking between a digit cell and an operator cell moved the board 76.8 px
