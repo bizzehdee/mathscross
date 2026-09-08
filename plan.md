@@ -338,8 +338,8 @@ across the generator, the solver, and the UI.
 | Intersection count | 9 | 9 | 24 |
 | Division | not used | not used | not used |
 | `allowNegative` | false | false | true, and inert |
-| Digit masking | 40% | 35% | re-measure at M8; was 50% at 7 x 7 |
-| Operator masking | 0% | 0% | re-measure at M8; was 30% at 7 x 7 |
+| Digit masking | 40% | 35% | 48%, and it is a ceiling |
+| Operator masking | 0% | 0% | 30%, and it is a choice |
 | **Solvable without guessing** | **guaranteed** | **guaranteed** | not guaranteed |
 
 Notes on this table:
@@ -403,12 +403,25 @@ Notes on this table:
   reached 100%, and generation got faster as well. Uniqueness is a budget and
   whichever kind is masked first spends it. The finding outlives the grade it was
   measured on. Section 5.4 step 1.
-- **Hard's two mask ratios are unknown until M8 re-measures them.** The 50% and 30%
-  in the old table were measured on a 7 x 7 Hard with seven equations. The new Hard
-  has 14 equations, 24 intersections and three-digit operands, and nothing carries
-  over: an intersection cell is harder to mask and a three-digit number is three
-  variables. Set both targets from measurement, as M2 did, and do not carry the old
-  figures forward as if they were still evidence.
+- **Hard's digit ratio is a ceiling and its operator ratio is a choice.** Measured on
+  the 11 x 11 layout over 30 seeds: a digit target of 0.50 and a digit target of 1.00
+  both achieve 0.481, so uniqueness is what stops the digit mask and the target is
+  set to what it allows. Every *operator* target measured is met in full, because
+  operators are masked first and spend the uniqueness budget before digits see it —
+  and the cost lands on digits. The frontier, at 100 seeds each:
+
+  | Operator target | Operators achieved | Digits achieved | Blanks | Median |
+  |---|---|---|---|---|
+  | 30% | 28.6% | 48.1% | 30 | 738 ms |
+  | 50% | 50.0% | 46.3% | 32 | 905 ms |
+  | 75% | 78.6% | 42.6% | 34 | 858 ms |
+  | 100% | 100% | 42.6% | 37 | 931 ms |
+
+  Hard hides three operators in ten, not ten in ten. Every operator hidden buys 7
+  more blanks and costs 5.5 points of digit density, but the grade below it hides
+  *none*, and jumping from none to all is the same mistake the re-grade was written
+  to fix. Reopening that is a design decision with the numbers already gathered, not
+  a measurement.
 - **The ladder is asserted on blanks per board.** Measured before the re-layout at
   6.0, 12.0, 16.6 and 31.0 across the four grades that then existed, with a test that fails if any
   grade asks less than the one below it. Keep the test, re-measure the three
@@ -948,16 +961,18 @@ The design that follows:
    not as a crash.
 3. **The UI shows a generating state after 150 ms**, with progress and a cancel
    control. A player must never face a frozen screen.
-4. **Measured at M2, and stale from M8.** The M2 figures — Easy 0 ms median and 3 ms
-   worst, Medium 2 ms and 8 ms, Hard 18 ms and 118 ms, the grade then called Extreme
-   1094 ms and 2021 ms, zero failures over 100 generations and 100 slow-suite seeds
-   per grade — were measured on the 5 x 5, 7 x 7 and 9 x 9 boards that section 2.9
-   replaced. Easy is unchanged. Medium and Hard must be re-measured, and Hard is the
-   one at risk: 14 equations, 24 intersections and six three-digit lines against a
-   grade that used to have seven equations on a 7 x 7. Figures and the decisions
-   that dominated them are in `.learnings/generation-measurements.md`.
+4. **Measured at M2, and again at M8 on the layouts.** Over 100 seeds a grade: Easy
+   6 ms median and 56 ms worst, Medium 4 ms and 29 ms, Hard 534 ms and 1039 ms, with
+   zero failures anywhere and a median of 9 attempts at Hard. The 5000-attempt cap is
+   far above the operating range, which is the right side to err on. Figures and the
+   decisions that dominated them are in `.learnings/generation-measurements.md`.
 
-   **If Hard cannot generate inside the cap, retreat in this order.** Lower Hard's
+   Hard costs two orders of magnitude more than the grades below it, and all of it is
+   the uniqueness check: 53 checks a board against Medium's 11, on three-digit
+   numbers. That is a property of the grade rather than a defect, and it is why
+   section 5.8's pre-generation matters more at Hard than anywhere else.
+
+   **If Hard ever stops generating inside the cap, retreat in this order.** Lower its
    mask targets first, since density is recoverable and the ladder is asserted on
    blanks per board rather than on a percentage. Then split its 11-cell lines,
    accepting 5-cell equations in their place, which removes three-digit values.

@@ -143,11 +143,18 @@ const HARD: DifficultyParameters = {
   minValue: -999,
   maxValue: 999,
   allowNegative: true,
-  // Measured on the old 7 x 7 Hard, which had seven equations. The new one has 14
-  // equations and 24 intersections, and neither figure carries over: an
-  // intersection cell is harder to mask and a three-digit number is three
-  // variables. TASK-005 re-measures both and resets them.
-  digitMaskRatio: 0.5,
+  // 0.48, and it is a ceiling rather than a choice. Measured on the 11 x 11 layout
+  // over 30 seeds: a target of 0.50 and a target of 1.00 both achieve 0.481, so
+  // uniqueness is what stops the mask, not the target. Set to what is allowed, so
+  // the density assertion measures against reality and a regression fails it.
+  digitMaskRatio: 0.48,
+  // 0.30, and this one *is* a choice — every operator target measured is met in
+  // full, because operators are masked first and spend the uniqueness budget
+  // before digits see it. The cost is paid in digits: 0.50 operators achieves 0.463
+  // digits, 1.00 achieves 0.426. Hard hides three operators in ten because Medium
+  // hides none, and the grade below being wholly deducible is what makes hidden
+  // operators a step rather than a cliff. The measured frontier is in
+  // `.learnings/generation-measurements.md` for anyone reopening the decision.
   operatorMaskRatio: 0.3,
   requireDeducible: false,
 }

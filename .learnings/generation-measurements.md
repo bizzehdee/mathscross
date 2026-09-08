@@ -215,3 +215,46 @@ fifteen lines and it took a third off the remaining time.
 **Profile the worker, not the runner.** `node --cpu-prof vitest run` profiles the main
 process and reports module compilation. The flags have to reach the test worker:
 `vitest run --pool=forks --execArgv="--cpu-prof" --execArgv="--cpu-prof-dir=..."`.
+
+## Re-measured on the fixed layouts, 2026-09-08
+
+100 seeds a grade, after the layouts of plan section 2.9 replaced the mesh search and
+the solver work in the section above. Easy is 5 x 5, Medium 7 x 7, Hard 11 x 11.
+
+| grade | median | worst | attempts | digit mask | operator mask | checks | failures |
+|---|---|---|---|---|---|---|---|
+| Easy | 6 ms | 56 ms | 20 | 0.444 | — | 4 | 0 |
+| Medium | 4 ms | 29 ms | 5 | 0.333 | — | 11 | 0 |
+| Hard | 534 ms | 1039 ms | 9 | 0.481 | 0.286 | 53 | 0 |
+
+Blanks per board are 4, 7 and 30, and the ladder is asserted over all 100 seeds rather
+than the fast suite's six.
+
+**Hard's digit target was a wish, not a measurement.** The 0.50 it carried came from
+the old 7 x 7 grade. On the 11 x 11 a target of 0.50 and a target of 1.00 both achieve
+**0.481**: uniqueness is what stops the digit mask, and the target had no effect on it
+at all. Set to 0.48, which is what it allows, so the density assertion measures against
+reality rather than sitting inside its tolerance.
+
+**The operator target is the opposite — every value of it is met in full**, because
+operators are masked before digits and spend the uniqueness budget first. The cost
+lands on the digits, and the frontier over 30 seeds is:
+
+| operator target | operators achieved | digits achieved | blanks | median |
+|---|---|---|---|---|
+| 0.30 | 0.286 | 0.481 | 30 | 738 ms |
+| 0.50 | 0.500 | 0.463 | 32 | 905 ms |
+| 0.75 | 0.786 | 0.426 | 34 | 858 ms |
+| 1.00 | 1.000 | 0.426 | 37 | 931 ms |
+
+So "what uniqueness allows" is a frontier, not a point, and only one end of it is a
+measurement. Hard sits at 0.30 because Medium hides no operators at all: every
+operator hidden buys 7 blanks and costs 5.5 points of digit density, but it also makes
+the step up from Medium the same seven-things-at-once jump the re-grade existed to
+remove. That end of the trade is a design decision, and this table is what to reopen
+it with.
+
+**Easy over-delivers and Medium under-delivers, both by rounding.** Easy has 9 digit
+cells and a 0.40 target, so 3.6 rounds to 4 and achieves 0.444. Medium has 21 and a
+0.35 target, so 7.35 rounds to 7 and achieves 0.333. Neither is a defect and neither
+needs a parameter change; on boards this small, one cell is 5 to 11 points of density.

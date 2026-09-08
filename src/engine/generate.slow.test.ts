@@ -7,7 +7,7 @@ import { meshProblems, buildMesh } from './mesh'
 import { parseGrid } from './parse'
 import { createRng } from './rng'
 import { solve } from './solver'
-import { CellKind } from './types'
+import { CellKind, EMPTY } from './types'
 
 /**
  * 100 seeds per difficulty, per plan section 13.4.
@@ -128,6 +128,40 @@ for (const difficulty of ALL_DIFFICULTIES) {
     })
   })
 }
+
+describe('the ladder', () => {
+  it('gives more blanks at each grade than the one below', () => {
+    // The ramp itself, over 100 seeds rather than the fast suite's six. A grade
+    // that asked less of a player than the one below would be a mislabelled grade
+    // however its parameters read, and this is the assertion that survives a
+    // re-measurement of the mask targets. Plan section 13.4.
+    const blanks = ALL_DIFFICULTIES.map((difficulty) => {
+      let total = 0
+      let boards = 0
+      for (let seed = 1; seed <= SEED_COUNT; seed += 1) {
+        const result = generate({ seed, difficulty })
+        if (!result.ok) {
+          continue
+        }
+        const { kinds, values } = result.puzzle.puzzle
+        boards += 1
+        for (let cell = 0; cell < values.length; cell += 1) {
+          if (kinds[cell] !== CellKind.Block && values[cell] === EMPTY) {
+            total += 1
+          }
+        }
+      }
+      return boards === 0 ? 0 : total / boards
+    })
+
+    for (let index = 1; index < blanks.length; index += 1) {
+      expect(
+        blanks[index],
+        `${ALL_DIFFICULTIES[index]} ${blanks[index]} against ${ALL_DIFFICULTIES[index - 1]} ${blanks[index - 1]}`,
+      ).toBeGreaterThan(blanks[index - 1] ?? 0)
+    }
+  })
+})
 
 describe('mesh structure over many seeds', () => {
   it('never produces a structurally invalid mesh', () => {

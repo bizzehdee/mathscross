@@ -11,7 +11,7 @@ Work them in order. Each one leaves the suite green and the app playable.
 - [x] TASK-003: Phase 1 reads a layout instead of searching for a mesh
 - [x] TASK-004: Fill and mask across mixed equation lengths
 - [x] TASK-009: Make the uniqueness check stop re-deriving what did not change
-- [ ] TASK-005: Re-measure Hard and reset its mask targets
+- [x] TASK-005: Re-measure Hard and reset its mask targets
 - [ ] TASK-006: Render an 11 x 11 board on a phone
 - [ ] TASK-007: The five named palettes and their previews
 - [ ] TASK-008: Documentation and store listing
@@ -196,8 +196,22 @@ seven equations and are not evidence about an 11 x 11 with 18.
   order — mask density, then splitting the 11-cell lines, then the layout, then the
   grid size — and bring the change back through `plan.md` section 2.9 first.
 
-Done when: the slow suite passes inside its wall-clock ceiling and the learnings file
-describes the boards that were actually measured.
+**Done.** 100 seeds a grade, zero failures: Easy 6 ms median and 56 ms worst, Medium
+4 ms and 29 ms, Hard 534 ms and 1039 ms, whole slow suite 103 seconds.
+
+Hard's digit target moved from 0.50 to **0.48**, which is what uniqueness allows: a
+target of 0.50 and a target of 1.00 both achieve 0.481, so the target was doing
+nothing. Its operator target stays at 0.30, and that one is a design decision rather
+than a measurement — every operator target is met in full, and the cost lands on the
+digits. The frontier is recorded in `difficulty.ts` and the learnings file so it can
+be reopened with numbers rather than reasoning.
+
+Easy over-delivers at 0.444 against 0.40 and Medium under-delivers at 0.333 against
+0.35, both purely from rounding a cell count: on boards this small one cell is 5 to 11
+points of density. Neither needs a parameter change.
+
+The blanks-per-board ladder is now asserted over all 100 seeds in the slow suite as
+well as the fast suite's six.
 
 ## TASK-006: Render an 11 x 11 board on a phone
 
