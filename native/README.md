@@ -126,7 +126,9 @@ forces an upload key reset for each of them. Reasoning in
 
 The first upload to Play must be done by hand — Google requires it, and a personal
 developer account may need a 14-day closed test before production access is granted.
-Set the `PLAY_TRACK` repository variable to `internal` until then.
+Releases therefore go to the **closed testing** track (`alpha`) by default. Set the
+`PLAY_TRACK` repository variable to `internal` for a faster loop, or to `production`
+once production access has been granted.
 
 Once that has happened, setting `PLAY_SERVICE_ACCOUNT_JSON` turns on automated
 publishing from `release.yml`. Until it is set, the publish step is dormant and the

@@ -264,17 +264,15 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.bizzeh.mathscross
           releaseFiles: native/platforms/android/app/build/outputs/bundle/release/*.aab
-          # Production by default: a release from this pipeline is a production
-          # release, not something to promote up through testing tracks.
+          # Closed testing by default. A personal developer account created
+          # after 13 November 2023 must run a closed test with 12 testers for 14
+          # continuous days before production access is granted, so a production
+          # upload is rejected until that is done and this is the track releases
+          # actually have to flow through first.
           #
-          # Overridable only because Play can refuse production uploads for reasons
-          # outside this repository. A personal developer account created after
-          # 13 November 2023 must run a closed test with 12 testers for 14
-          # continuous days before production access is granted, and until then an
-          # upload to this track is rejected. Setting the repository variable
-          # PLAY_TRACK to `internal` gets releases flowing meanwhile; clear it once
-          # production access is granted.
-          track: ${{ vars.PLAY_TRACK || 'production' }}
+          # Overridable with the repository variable PLAY_TRACK: `internal` for a
+          # quicker loop, `production` once production access is granted.
+          track: ${{ vars.PLAY_TRACK || 'alpha' }}
           # Published, not drafted. A tag is the release: it goes live with no
           # further step and no approval gate. The tag is therefore the only thing
           # between a commit and every player, so tag deliberately.
@@ -284,7 +282,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           if [ "${{ steps.publish.outcome }}" = "success" ]; then
-            echo "::notice title=Published to Play::Version ${{ steps.version.outputs.version }} (versionCode ${{ steps.version.outputs.versionCode }}) is live on the ${{ vars.PLAY_TRACK || 'production' }} track. It cannot be withdrawn, only superseded by a higher version."
+            echo "::notice title=Published to Play::Version ${{ steps.version.outputs.version }} (versionCode ${{ steps.version.outputs.versionCode }}) is live on the ${{ vars.PLAY_TRACK || 'alpha' }} track. It cannot be withdrawn, only superseded by a higher version."
           else
             echo "::notice title=Not uploaded::The binaries are attached to the release. Upload the .aab by hand, or set PLAY_SERVICE_ACCOUNT_JSON to automate it. See native/README.md."
           fi
