@@ -158,6 +158,21 @@ describe('reads never throw', () => {
     expect(loadBoard('free', memory({ [FREE_PLAY_KEY]: bad }))).toBeNull()
   })
 
+  it('discards a board naming a difficulty that no longer exists', () => {
+    // `extreme` was a grade until the layouts landed. A board saved then names it,
+    // and casting the string through would hand the app a difficulty with no
+    // parameters behind it. Discarding is right: the board cannot be played.
+    const state = game()
+    const storage = memory()
+    saveBoard('free', state, 0, storage)
+
+    const payload = JSON.parse(storage.data[FREE_PLAY_KEY] ?? '{}') as Record<string, unknown>
+    payload['difficulty'] = 'extreme'
+    storage.data[FREE_PLAY_KEY] = JSON.stringify(payload)
+
+    expect(loadBoard('free', storage)).toBeNull()
+  })
+
   it('ignores a solution field left by an older version', () => {
     const state = game()
     const storage = memory()
@@ -237,6 +252,21 @@ describe('stats and settings', () => {
 
     expect(loaded.byDifficulty.easy.completed).toBe(0)
     expect(loaded.daily.currentStreak).toBe(0)
+  })
+
+  it('drops a difficulty that no longer exists, keeping the rest', () => {
+    // Stats for `extreme` outlive the grade. They are dropped rather than migrated:
+    // there is nothing to migrate them into, and a completion count for a grade a
+    // player can no longer play is not a figure worth showing.
+    const storage = memory({
+      'mathscross.stats.v1':
+        '{"v":1,"byDifficulty":{"easy":{"completed":3,"bestMs":100,"times":[100]},' +
+        '"extreme":{"completed":9,"bestMs":50,"times":[50]}}}',
+    })
+    const loaded = loadStats(storage)
+
+    expect(loaded.byDifficulty.easy.completed).toBe(3)
+    expect(Object.keys(loaded.byDifficulty).sort()).toEqual(['easy', 'hard', 'medium'])
   })
 
   it('round trips settings and rejects an unknown theme', () => {

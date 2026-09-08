@@ -202,9 +202,8 @@ describe('the start screen', () => {
       'Easy',
       'Medium',
       'Hard',
-      'Extreme',
     ])
-    expect(difficulties[3]?.getAttribute('aria-label')).toContain('every operator hidden')
+    expect(difficulties[2]?.getAttribute('aria-label')).toContain('operators hidden')
     // The two grades a child plays say so, because "solvable by logic" is the
     // property being promised and it is not visible from the grid size.
     expect(difficulties[0]?.getAttribute('aria-label')).toContain('solvable by logic')

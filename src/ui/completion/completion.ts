@@ -36,7 +36,6 @@ const LABELS: Readonly<Record<Difficulty, string>> = {
   easy: 'Easy',
   medium: 'Medium',
   hard: 'Hard',
-  extreme: 'Extreme',
 }
 
 export function createCompletionView(callbacks: CompletionCallbacks): CompletionView {

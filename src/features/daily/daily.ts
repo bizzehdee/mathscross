@@ -39,18 +39,18 @@ export function previousDateKey(date: Date): string {
  *
  * Indexed by `getUTCDay`, where 0 is Sunday.
  *
- * Four grades over seven days, with the week starting gently: two deducible days,
- * two more, then two that permit guessing, and Extreme once a week. Sunday holds
- * the hardest so that the one day a player is most likely to have time for it is
- * the day it appears — and so that missing it costs a streak only once a week.
+ * Three grades over seven days, with the week starting gently: five days that
+ * guarantee a guess-free route and two that do not. Hard sits on the weekend, so the
+ * days a player is most likely to have time for it are the days it appears, and so
+ * the grade most likely to break a streak can only do so twice a week.
  */
 const BY_UTC_DAY: readonly Difficulty[] = [
-  Difficulty.Extreme, // Sunday
+  Difficulty.Hard, // Sunday
   Difficulty.Easy, // Monday
   Difficulty.Easy, // Tuesday
   Difficulty.Medium, // Wednesday
   Difficulty.Medium, // Thursday
-  Difficulty.Hard, // Friday
+  Difficulty.Medium, // Friday
   Difficulty.Hard, // Saturday
 ]
 

@@ -3,11 +3,10 @@ import { parametersFor, Difficulty } from './difficulty'
 import { hasUniqueSolution, solve } from './solver'
 import { gridFromText } from './grid'
 import { referenceGrid, singleRowGrid } from './test-fixtures'
-import { Operator } from './types'
+import { ALL_OPERATORS, Operator } from './types'
 
 const EASY = parametersFor(Difficulty.Easy)
 const MEDIUM = parametersFor(Difficulty.Medium)
-const EXTREME = parametersFor(Difficulty.Extreme)
 
 describe('a single solution', () => {
   it('solves one blank digit', () => {
@@ -18,9 +17,10 @@ describe('a single solution', () => {
   })
 
   it('solves a blank operator', () => {
-    // Extreme's operator set, because division is the only operator giving three
-    // here and no lower grade includes it.
-    const result = solve(singleRowGrid('9 @ 3 = 3'), { operators: EXTREME.operators })
+    // Every operator, because division is the only one giving three here and no
+    // difficulty offers division since Extreme was removed. The solver still has to
+    // handle it: the engine keeps division for the grade that may return.
+    const result = solve(singleRowGrid('9 @ 3 = 3'), { operators: ALL_OPERATORS })
 
     expect(result.count).toBe(1)
     expect(result.first?.[1]).toBe(Operator.Divide)

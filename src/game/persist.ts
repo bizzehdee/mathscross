@@ -21,7 +21,7 @@
  *      written by an older version, or truncated by a kill mid-write. A `JSON.parse`
  *      failure is a normal case here, not an exception.
  */
-import type { Difficulty } from '../engine/difficulty'
+import { isDifficulty, type Difficulty } from '../engine/difficulty'
 import { createGrid } from '../engine/grid'
 import { EMPTY, type Grid } from '../engine/types'
 import { emptyStats, normaliseStats, STATS_STORAGE_KEY, type Stats } from '../features/stats/stats'
@@ -157,7 +157,7 @@ export function loadBoard(slot: Slot, storage: StorageLike = defaultStorage()): 
     !isNumberArray(stored.kinds, cells) ||
     !isNumberArray(stored.givens, cells) ||
     !isNumberArray(stored.entries, cells) ||
-    typeof stored.difficulty !== 'string'
+    !isDifficulty(stored.difficulty)
   ) {
     return null
   }
@@ -182,7 +182,7 @@ export function loadBoard(slot: Slot, storage: StorageLike = defaultStorage()): 
       : history.length
 
   return {
-    difficulty: stored.difficulty as Difficulty,
+    difficulty: stored.difficulty,
     puzzle,
     board,
     elapsedMs:

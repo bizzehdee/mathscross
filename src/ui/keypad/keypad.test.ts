@@ -6,7 +6,7 @@
  * is not a corner case but the main way a Hard puzzle is played.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
-import { Difficulty } from '../../engine/difficulty'
+import { ALL_DIFFICULTIES, Difficulty } from '../../engine/difficulty'
 import { CellKind, Operator } from '../../engine/types'
 import { createKeypadView } from './keypad'
 
@@ -50,13 +50,13 @@ describe('which operators are offered', () => {
 
     const hard = mount(Difficulty.Hard)
     expect(visibleOperators(hard.view)).toEqual(['Plus', 'Minus', 'Times'])
-
-    const extreme = mount(Difficulty.Extreme)
-    expect(visibleOperators(extreme.view)).toEqual(['Plus', 'Minus', 'Times', 'Divided by'])
   })
 
-  it('offers division at Extreme alone', () => {
-    for (const difficulty of [Difficulty.Easy, Difficulty.Medium, Difficulty.Hard]) {
+  it('offers division nowhere', () => {
+    // No grade uses it since Extreme was removed. The key must not appear on a pad
+    // the moment a difficulty stops listing the operator, which is the property
+    // being asserted — not that division is gone from the engine, where it stays.
+    for (const difficulty of ALL_DIFFICULTIES) {
       expect(visibleOperators(mount(difficulty).view), difficulty).not.toContain('Divided by')
     }
   })
@@ -72,9 +72,9 @@ describe('the pad follows the focused cell', () => {
   })
 
   it('shows operators for an operator cell and hides digits', () => {
-    // Extreme masks every operator, so this is the ordinary case there rather
+    // Hard masks some of its operators, so this is an ordinary case there rather
     // than an edge one.
-    const view = mount(Difficulty.Extreme)
+    const view = mount(Difficulty.Hard)
     view.view.showFor(CellKind.Operator, false)
 
     expect(pad(view.view, 'operators').hidden).toBe(false)
@@ -113,22 +113,20 @@ describe('entry', () => {
   })
 
   it('reports the operator pressed as its stored value, not its glyph', () => {
-    const view = mount(Difficulty.Extreme)
+    const view = mount(Difficulty.Hard)
     view.view.showFor(CellKind.Operator, false)
 
-    // Not an optional call. When this test was pointed at a grade without
-    // division the selector returned null, the click was silently skipped, and
-    // the failure read "expected [] to equal [3]" — which says nothing about the
-    // button being absent. A missing key should fail as a missing key.
-    const key = pad(view.view, 'operators').querySelector<HTMLElement>(
-      '[aria-label="Divided by"]',
-    )
+    // Not an optional call. When this test was pointed at a grade without the
+    // operator it looked for, the selector returned null, the click was silently
+    // skipped, and the failure read "expected [] to equal [2]" — which says nothing
+    // about the button being absent. A missing key should fail as a missing key.
+    const key = pad(view.view, 'operators').querySelector<HTMLElement>('[aria-label="Times"]')
     if (key === null) {
-      throw new Error('no division key on the operator pad')
+      throw new Error('no times key on the operator pad')
     }
     key.click()
 
-    expect(view.values).toEqual([Operator.Divide])
+    expect(view.values).toEqual([Operator.Times])
   })
 
   it('reports a clear', () => {

@@ -10,7 +10,6 @@ export const Difficulty = {
   Easy: 'easy',
   Medium: 'medium',
   Hard: 'hard',
-  Extreme: 'extreme',
 } as const
 
 export type Difficulty = (typeof Difficulty)[keyof typeof Difficulty]
@@ -19,8 +18,19 @@ export const ALL_DIFFICULTIES: readonly Difficulty[] = [
   Difficulty.Easy,
   Difficulty.Medium,
   Difficulty.Hard,
-  Difficulty.Extreme,
 ]
+
+/**
+ * Whether an arbitrary string names a difficulty.
+ *
+ * Storage is the reason this exists. A board or a stats record written by an
+ * earlier version can name a grade that no longer exists — `extreme` is the first
+ * — and a read that casts the string through would hand the rest of the app a
+ * difficulty with no parameters behind it.
+ */
+export function isDifficulty(value: unknown): value is Difficulty {
+  return typeof value === 'string' && (ALL_DIFFICULTIES as readonly string[]).includes(value)
+}
 
 export interface DifficultyParameters {
   /** Grid side length. Grids are always square. */
@@ -146,48 +156,10 @@ const HARD: DifficultyParameters = {
   requireDeducible: false,
 }
 
-/**
- * The old Hard, unchanged, renamed.
- *
- * Named for what it is. Every operator hidden on a 9x9 with division and
- * three-digit values is not the top of a scale a child is climbing; it is a
- * different game, and calling it Hard made the grade below it look mild.
- */
-const EXTREME: DifficultyParameters = {
-  size: 9,
-  minEquationLength: 5,
-  maxEquationLength: 9,
-  operators: [Operator.Plus, Operator.Minus, Operator.Times, Operator.Divide],
-  minValue: -999,
-  maxValue: 999,
-  minIntersections: 10,
-  // A 9x9 whose equations sit on rows and columns 0, 2, 4, 6 and 8 has 25
-  // intersections, which is the structural maximum. Stated as a bound so the
-  // mesh has a range to satisfy rather than an open-ended target.
-  maxIntersections: 25,
-  allowNegative: true,
-  // 0.45, not the 0.75 the plan first specified. Measured at M2: 0.75 is not
-  // reachable at any acceptable cost. A uniqueness check on a 9x9 grows
-  // exponentially with the blank count — 1 ms at 5 blanks, 48 ms at 15, over
-  // 2000 ms at 19 — so masking to 29 of 39 digit cells takes minutes per puzzle.
-  // Achieved is 0.46, so this target is met rather than merely approached.
-  //
-  // Raising it needs a stronger solver, not a bigger budget: bounds propagation
-  // over partially known numbers would prune where the current forward check
-  // cannot. Recorded in .learnings/generation-measurements.md as the way back.
-  digitMaskRatio: 0.45,
-  // 100% operator masking, and it holds. M0.5 doubted this and the plan demoted it
-  // to a hypothesis; M2 measured it reached in full, but only once operators were
-  // masked *before* digits. With digits first it reached 14%. See mask.ts rule 1.
-  operatorMaskRatio: 1,
-  requireDeducible: false,
-}
-
 const TABLE: Readonly<Record<Difficulty, DifficultyParameters>> = {
   [Difficulty.Easy]: EASY,
   [Difficulty.Medium]: MEDIUM,
   [Difficulty.Hard]: HARD,
-  [Difficulty.Extreme]: EXTREME,
 }
 
 export function parametersFor(difficulty: Difficulty): DifficultyParameters {

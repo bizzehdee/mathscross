@@ -17,7 +17,6 @@ const LABELS: Readonly<Record<Difficulty, string>> = {
   easy: 'Easy',
   medium: 'Medium',
   hard: 'Hard',
-  extreme: 'Extreme',
 }
 
 /** What each difficulty asks of the player, so a choice is informed. */
@@ -25,7 +24,6 @@ const DESCRIPTIONS: Readonly<Record<Difficulty, string>> = {
   easy: '5 by 5, single digits, plus and minus, always solvable by logic',
   medium: '7 by 7, two-digit numbers, times as well, always solvable by logic',
   hard: '7 by 7, negative numbers, some operators hidden',
-  extreme: '9 by 9, three-digit numbers, division, every operator hidden',
 }
 
 export interface ResumeSummary {

@@ -58,13 +58,11 @@ describe('the promises each grade makes', () => {
     }
   })
 
-  it('does not promise the same of Hard and Extreme', () => {
+  it('does not promise the same of Hard', () => {
     // Stated so that turning the flag on everywhere is a deliberate act rather
-    // than a drift. These grades guarantee one answer, not a guess-free route to
-    // it, and their densities depend on that freedom.
-    for (const difficulty of [Difficulty.Hard, Difficulty.Extreme]) {
-      expect(parametersFor(difficulty).requireDeducible, difficulty).toBe(false)
-    }
+    // than a drift. Hard guarantees one answer, not a guess-free route to it, and
+    // its density depends on that freedom.
+    expect(parametersFor(Difficulty.Hard).requireDeducible).toBe(false)
   })
 
   it('keeps operators on show below Hard', () => {

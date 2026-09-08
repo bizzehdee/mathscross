@@ -281,7 +281,7 @@ length = wA + 1 + wB + 1 + wC          plus 1 per unary sign
 |---|---|
 | 5 cells | `9 + 9 = 9`. Single digits only |
 | 7 cells | `9 + 45 = 54`. One two-digit operand and a two-digit result |
-| 9 cells | `9 * 111 = 999`, or `15 * 12 = 180` |
+| 11 cells | `123 + 456 = 579`. Three digits everywhere |
 
 **Decided: the derived ranges are accepted.** The difficulty table in section 2.7
 states the achievable range for each difficulty, not the range from the original
@@ -289,38 +289,73 @@ specification. Equations are not lengthened to reach the original numbers, becau
 that would mean larger grids at every difficulty, which costs generation time and
 screen space for no gameplay gain.
 
-Two consequences follow:
+Three consequences follow:
 
 1. **Easy's stated range of 1 to 20 is unreachable.** Easy is 5 x 5 with 5-cell
    equations, so every operand and result is a single digit. Easy's real range is
    0 to 9.
-2. **Medium's stated maximum of 100 is unreachable.** Medium is 7 x 7 with equations
-   of at most 7 cells, which caps a result at 99.
+2. **Medium's stated maximum of 100 is unreachable.** Medium is 7 x 7 with 7-cell
+   equations, which caps a result at 99.
+3. **Hard reaches three digits, because its layout carries 11-cell lines.** An
+   11-cell equation is `ddd op ddd = ddd` and admits nothing else, so Hard's range is
+   0 to 999. This is a consequence of the layout in section 2.9, not a parameter
+   anybody chose.
 
-Neither is a defect. Record both in `.learnings/` during M1, so a later reader who
-compares the difficulty table against the original specification does not treat the
-difference as a bug and "fix" it.
+None is a defect. Record them in `.learnings/`, so a later reader who compares the
+difficulty table against the original specification does not treat the difference as
+a bug and "fix" it.
+
+**Most width triples that fit are arithmetically impossible, and the check for that
+must exclude the degenerate operations of section 2.7.1.** Enumerated exhaustively
+over the operator sets and ranges of section 2.7, only these survive:
+
+| Equation length | Feasible widths (`left`, `right`, `result`) |
+|---|---|
+| 5 cells | `(1, 1, 1)` |
+| 7 cells | `(1, 2, 2)`, `(2, 1, 2)`, `(2, 2, 1)` |
+| 11 cells | `(3, 3, 3)` |
+
+Interval arithmetic alone is not enough to produce that table. It admits `(1, 3, 1)`
+at 11 cells' operator set, on the strength of `0 * 123 = 0` — arithmetically true,
+banned by section 2.7.1, and the only way the triple can hold. A feasibility check
+that ignores the degenerate rule therefore reports a width as usable when every
+instance of it is illegal, and the fill then fails on that equation every seed. The
+check must apply both rules together.
 
 ### 2.7 Difficulty parameters
 
 Hold this table in one place, `src/engine/difficulty.ts`. Do not spread these values
 across the generator, the solver, and the UI.
 
-| Parameter | Easy | Medium | Hard | Extreme |
-|---|---|---|---|---|
-| Grid dimensions | 5 x 5 | 7 x 7 | 7 x 7 | 9 x 9 |
-| Equation length | 5 cells | 5 to 7 cells | 5 to 7 cells | 5 to 9 cells |
-| Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` | `+` `-` `*` `/` |
-| Derived value range | 0 to 9 | 0 to 99 | -99 to 99 | -999 to 999 |
-| Intersection count | 2 to 4 | 5 to 8 | 5 to 8 | 10 or more |
-| Division | not used | not used | not used | integer results only |
-| `allowNegative` | false | false | true | true |
-| Digit masking | 40% | 35% | 50% | 45% |
-| Operator masking | 0% | 0% | 30% | 100% |
-| **Solvable without guessing** | **guaranteed** | **guaranteed** | not guaranteed | not guaranteed |
+| Parameter | Easy | Medium | Hard |
+|---|---|---|---|
+| Grid dimensions | 5 x 5 | 7 x 7 | 11 x 11 |
+| Layout | fixed, section 2.9 | fixed, section 2.9 | fixed, section 2.9 |
+| Equations per board | 6 | 6 | 18 |
+| Equation length | 5 cells | 7 cells | 5 and 11 cells |
+| Allowed operators | `+` `-` | `+` `-` `*` | `+` `-` `*` |
+| Derived value range | 0 to 9 | 0 to 99 | 0 to 999 |
+| Intersection count | 9 | 9 | 36 |
+| Division | not used | not used | not used |
+| `allowNegative` | false | false | true, and inert |
+| Digit masking | 40% | 35% | re-measure at M8; was 50% at 7 x 7 |
+| Operator masking | 0% | 0% | re-measure at M8; was 30% at 7 x 7 |
+| **Solvable without guessing** | **guaranteed** | **guaranteed** | not guaranteed |
 
 Notes on this table:
 
+- **Boards are no longer searched for; they are laid out by hand.** Section 2.9 holds
+  one fixed layout per difficulty, and it replaces the mesh search entirely. Grid
+  size, equation count, equation lengths and intersection count are all read off that
+  layout rather than chosen as parameters, which is why four rows of this table are
+  now facts about a picture instead of ranges to satisfy.
+- **There are three grades. Extreme is gone.** Four grades over three sizes was one
+  more than the ladder needed once Hard moved to 11 x 11, and Extreme was the grade
+  furthest from the audience in section 1. Its distinguishing features go with it:
+  division is now unused by every difficulty, and 100% operator masking is unused.
+  The engine keeps division — the parser, evaluator and solver all support it and the
+  tests cover it — so restoring a fourth grade is a difficulty-table change and a
+  layout, not an engine change. Recorded in section 17.
 - **Easy is the entry point.** With the Kids tier deferred, Easy carries the job of
   teaching the game. Its parameters are unchanged and are already gentle: single
   digits, `+` and `-` only, and no masked operators. What Easy gains instead is the
@@ -358,21 +393,26 @@ Notes on this table:
   attempts, which are not. Section 5.4.
 - **The mask ratios are measured, not chosen.** M2 measured them over 60 seeds and
   set each target to what uniqueness actually allows. Digit masking moved from 60%
-  to 50% at what is now Hard, and from 75% to 45% at what is now Extreme; both are
-  met rather than merely approached. Raising them again needs a stronger solver, not
-  a bigger time budget: see `.learnings/generation-measurements.md` for the specific
+  to 50% at what is now Hard, and from 75% to 45% at the grade then called Extreme;
+  both were met rather than merely approached. Both figures are historical: they
+  describe the 7 x 7 and 9 x 9 boards that the layouts in section 2.9 replaced.
+  Raising them again needs a stronger solver, not a bigger time budget: see `.learnings/generation-measurements.md` for the specific
   missing capability.
-- **Extreme's 100% operator masking holds.** M0.5 doubted it and this section
-  previously demoted it to a hypothesis. M2 measured it reached in full — but only
-  once operators are masked *before* digits. Masking digits first left it at 14%,
-  inverting the ladder on its most distinctive dimension. It was never the density
-  that was wrong, only the order. Section 5.4 step 1.
-- **Extreme shows more digit givens than Hard**, at 45% against 50%. That is
-  deliberate and it is not a ladder inversion: Extreme hides *every* operator, uses
-  three-digit values and division, and runs on a 9 x 9. Operator masking is the
-  dominant difficulty lever, and it is the scarce one. The ladder is asserted
-  directly instead, on blanks per board: measured 6.0, 12.0, 16.6 and 31.0, with a
-  test that fails if any grade ever asks less than the one below it.
+- **Mask operators before digits.** Measured at M2 on the grade then called Extreme:
+  masking digits first reached 14% of the operator target, masking operators first
+  reached 100%, and generation got faster as well. Uniqueness is a budget and
+  whichever kind is masked first spends it. The finding outlives the grade it was
+  measured on. Section 5.4 step 1.
+- **Hard's two mask ratios are unknown until M8 re-measures them.** The 50% and 30%
+  in the old table were measured on a 7 x 7 Hard with seven equations. The new Hard
+  has 18 equations, 36 intersections and three-digit operands, and nothing carries
+  over: an intersection cell is harder to mask and a three-digit number is three
+  variables. Set both targets from measurement, as M2 did, and do not carry the old
+  figures forward as if they were still evidence.
+- **The ladder is asserted on blanks per board.** Measured before the re-layout at
+  6.0, 12.0, 16.6 and 31.0 across the four grades that then existed, with a test that fails if any
+  grade asks less than the one below it. Keep the test, re-measure the three
+  remaining figures at M8.
 - `--tap-min` is 44 px at every difficulty. The enlarged target existed only for the
   Kids tier.
 
@@ -395,7 +435,7 @@ two terms and derives the third, and zero survives more draws than any other val
 it is in range for every difficulty, it never overflows the derived term, and under
 addition and subtraction it cannot push the result out of range either. **The freest
 value wins the most draws.** Measured after the rule: zero degenerate operations
-across 100 puzzles spanning all four grades.
+across 100 puzzles spanning all four grades that then existed.
 
 ### 2.8 Reference board
 
@@ -421,13 +461,116 @@ rows     1 + 2 = 3      2 + 1 = 3      3 + 3 = 6
 columns  1 + 2 = 3      2 + 1 = 3      3 + 3 = 6
 ```
 
-This board is a parsing and evaluation fixture, not a difficulty-conformant puzzle.
-Its nine intersections exceed the Easy range on purpose. Note also that rows 0 and 2
+This board is a parsing and evaluation fixture. Its shape is now also Easy's real
+layout, cell for cell — section 2.9 fixes Easy as rows and columns 0, 2 and 4 of a
+5 x 5, which is exactly what this fixture draws. When it was written its nine
+intersections exceeded the Easy range on purpose; that range is gone and the fixture
+is conformant by accident of having been right. Note also that rows 0 and 2
 are separated by a row containing two operator cells, not blocks — which is legal
 under section 5.1's spacing rule and would not have been under an earlier draft of
 it. Put the board in `src/engine/test-fixtures.ts`, matching the sibling's
 convention, and assert the engine extracts the same six equations a human reads from
 it. This is the first test written in M1.
+
+
+### 2.9 Board layouts are fixed
+
+One layout per difficulty, hand-drawn, held as data in `src/engine/layouts.ts`. There
+is no mesh search. `#` is a `block` cell, `.` is a cell an equation covers.
+
+**Easy, 5 x 5.** Equations on rows and columns 0, 2 and 4.
+
+```
+.....
+.#.#.
+.....
+.#.#.
+.....
+```
+
+Six equations, all 5 cells, all `(1, 1, 1)`. Nine intersections. Identical to the
+reference board in section 2.8.
+
+**Medium, 7 x 7.** Equations on rows and columns 0, 3 and 6.
+
+```
+.......
+.##.##.
+.##.##.
+.......
+.##.##.
+.##.##.
+.......
+```
+
+Six equations, all 7 cells. Nine intersections. Every equation chooses its widths
+independently from `(1, 2, 2)`, `(2, 1, 2)` and `(2, 2, 1)`, because the crossings sit
+at offsets 0, 3 and 6 and all three triples put digits there. That is 3^6 shapes on
+one layout, which is where a fixed layout gets its variety back.
+
+Medium is Easy's shape one size up, and that is the point. The step from Easy is the
+7-cell line, multiplication and two-digit numbers, and nothing else: same equation
+count, same intersection count, same guarantee of a guess-free route.
+
+**Hard, 11 x 11.**
+
+```
+.....#.....
+.#.#.#.#.#.
+...........
+.#.#.#.#.#.
+.....#.....
+.#.#####.#.
+.....#.....
+.#.#.#.#.#.
+...........
+.#.#.#.#.#.
+.....#.....
+```
+
+Eighteen equations: twelve of 5 cells at `(1, 1, 1)`, and six of 11 cells at
+`(3, 3, 3)` — rows 2 and 8, and columns 0, 2, 8 and 10. Thirty-six intersections.
+
+**The Hard layout as first drawn could not be built, and the reason generalises.**
+It closed rows 2 and 8 at columns 1 and 9, and columns 2 and 8 at rows 1 and 9,
+making those four lines 7 cells rather than 11. A 7-cell equation admits only
+`(1, 2, 2)`, `(2, 1, 2)` and `(2, 2, 1)`, whose operator and equals cells fall at
+offsets `{1, 4}`, `{2, 4}` and `{2, 5}`. Those four lines are crossed at offsets 0,
+2, 4 and 6, and every one of the three triples puts a non-digit at offset 2 or 4. No
+assignment exists, for any seed. Opening the four lines to the full 11 cells is the
+smallest change that fixes it, and it is what the picture above does.
+
+The rule worth carrying: **on a lattice whose lines are two apart, a 7-cell equation
+cannot cross at every even offset.** 5-cell and 11-cell equations both can. A future
+layout mixing 7-cell lines into a 2-spaced lattice will fail the same way, and it
+will fail silently at fill time rather than at layout time unless section 13.3
+asserts width consistency on the layouts themselves.
+
+**Why fixed layouts at all.** Three reasons, in the order they matter:
+
+1. A board's shape is now a design decision made once and looked at, rather than an
+   emergent property of a search nobody can picture. The three grids above were
+   drawn, checked and argued over before any of them was written down.
+2. The whole of phase 1 disappears — pattern enumeration, non-adjacent subset
+   generation, layout scoring and the intersection range that drove it. What is left
+   is a table lookup and a width assignment.
+3. Generation cost stops varying with which mesh the search happened to pick. Every
+   Hard board now has the same 18 equations, so the cost distribution has one shape
+   instead of one per layout.
+
+What is given up is board-shape variety, which at Easy and Medium was already almost
+nil: a 5 x 5 with 5-cell equations has very few legal shapes, and the search picked
+among them by seed. Variety now comes from the fill, the mask and — at Medium — the
+per-equation width choice.
+
+**Negatives are still inert, at every grade.** No layout places a sign cell, so no
+result can be written negative, and an equation is exactly `A op B = C` with a single
+operator, so there is no intermediate to be negative either. Hard's `allowNegative`
+has therefore never changed an output. It stays in the table and in the code because
+the parser, evaluator and solver all handle sign cells already, and a fixed layout is
+the natural place to author one: a layout may declare an operator cell immediately
+after its equals cell. Doing so is a change to this section and to `layouts.ts`, and
+nothing else. Deferred, and recorded in section 17 so it is not mistaken for a bug.
 
 ## 3. Repository layout
 
@@ -599,45 +742,39 @@ Generation runs on device in four phases, in a Web Worker. It must be determinis
 must never emit an invalid or ambiguous puzzle, and must never block the main
 thread.
 
-### 5.1 Phase 1 — skeletal mesh
+### 5.1 Phase 1 — the layout and its widths
 
-1. Initialise an empty `N x N` grid.
-2. Place a seed horizontal equation across the centre row.
-3. Recursively branch vertical and horizontal segments off existing cells, subject
-   to these constraints:
-   - Each segment length must fall in the difficulty's equation-length range.
-   - **Two parallel equations must not occupy adjacent rows or columns.** They must
-     be separated by at least one intervening row or column. That intervening line
-     is not required to be all `block` cells — it normally carries the operator and
-     `equals` cells of the perpendicular equations, as it does in section 2.8. An
-     earlier draft demanded block spacing and thereby outlawed the plan's own
-     reference board.
-   - Every non-`block` cell must belong to at least one equation, per section 2.4.
-   - The graph of connected equations must form a single connected component.
-   - The intersection count must fall in the difficulty's range. **Prefer the bottom
-     of that range.** M0.5 suggested the top, reasoning that intersection cells
-     survive masking; M2 measured the opposite trade dominating. Intersections make
-     the *fill* harder at a punishing rate — at Hard the top of the range is 25,
-     which on a 9 x 9 means 45 interlocking, doubly-constrained digit cells — while
-     the masking benefit is already captured by the ordering in section 5.4. Satisfy
-     the minimum and stop.
-   - **Reject width triples no operator can satisfy.** Filtering on cell count alone
-     admits arithmetically impossible patterns, and they are not rare: `dd op ddd =
-     dd` fits nine cells exactly and can never hold. Interval arithmetic over the
-     three width ranges removes them before a fill is attempted.
-4. Stop when the intersection count is met and no further segment can be placed.
+The mesh search is gone. Section 2.9 fixes one layout per difficulty and phase 1 is
+now a lookup and a width assignment.
 
-The mesh must also fix **operand cell widths**. For each equation, decide how many
-`digit` cells each operand and the result occupy, and whether a sign cell precedes
-the result. The widths must sum to the segment length per the formula in section
-2.6. This step has no counterpart in Sudoku and no counterpart in a
-one-integer-per-cell design. It is where the one-digit-per-cell choice adds the most
-work.
+1. Read the difficulty's layout from `src/engine/layouts.ts` and paint its `block`
+   cells.
+2. Take its equations — every run of 5 or more non-`block` cells along a row or a
+   column — from the same table. They are data, not a scan: a layout that disagrees
+   with its own equation list is a defect in `layouts.ts`, and section 13.3 asserts
+   the two match.
+3. Assign each equation its **operand cell widths**: how many `digit` cells the left
+   operand, the right operand and the result occupy, summing to the equation length
+   less two per section 2.6. Choose with the seeded PRNG from the feasible triples in
+   that section — which at Easy and Hard is a single triple per length, and at Medium
+   is a free choice of three per equation.
+4. Paint the resulting `operator` and `equals` cells.
 
-Widths must agree at intersections. Where a horizontal and a vertical equation cross
-at a `digit` cell, that cell sits at some position within a number in each equation.
-The mesh must record both positions. A mismatch here is the most likely source of
-generator bugs, so assert width consistency at the end of phase 1.
+Two properties the search used to have to satisfy are now properties of the picture,
+checked once in a test rather than per attempt: every non-`block` cell belongs to an
+equation, and the equations form a single connected component. Parallel equations
+still may not sit in adjacent rows or columns, and the intervening line still carries
+operator and `equals` cells rather than blocks — section 2.8's board is the example
+and an earlier draft outlawed it.
+
+**Widths must agree at intersections**, and this is the one thing phase 1 can still
+get wrong. Where a row and a column equation cross, the shared cell must be a `digit`
+cell in both: if either equation puts its operator or its equals there, the layout
+cannot be filled at all. Section 2.9 records the Hard layout that failed exactly this
+way, and the general rule — a 7-cell equation cannot cross at every even offset of a
+2-spaced lattice. Assert width consistency at the end of phase 1, and assert it
+against the layout table in the fast suite, where it costs nothing and fails at the
+point the layout is wrong rather than the point the fill gives up.
 
 ### 5.2 Phase 2 — operator and value fill
 
@@ -791,15 +928,22 @@ The design that follows:
    not as a crash.
 3. **The UI shows a generating state after 150 ms**, with progress and a cancel
    control. A player must never face a frozen screen.
-4. **Measured at M2, and again after the re-grade.** Easy generates in 0 ms median
-   and 3 ms worst; Medium in 2 ms and 8 ms; Hard in 18 ms and 118 ms; Extreme in
-   1094 ms median and 2021 ms worst, needing a median of 3 attempts. Zero failures
-   across 100 generations, and none in 100 seeds per grade in the slow suite. The
-   5000-attempt cap is therefore far above the operating range, which is the right
-   side to err on. Extreme is slower than the grade it was measured as before the
-   re-grade — 830 ms median, 1951 ms worst — because rejecting degenerate arithmetic
-   costs the fill extra draws. Figures and the decisions that dominated them are in
-   `.learnings/generation-measurements.md`.
+4. **Measured at M2, and stale from M8.** The M2 figures — Easy 0 ms median and 3 ms
+   worst, Medium 2 ms and 8 ms, Hard 18 ms and 118 ms, the grade then called Extreme
+   1094 ms and 2021 ms, zero failures over 100 generations and 100 slow-suite seeds
+   per grade — were measured on the 5 x 5, 7 x 7 and 9 x 9 boards that section 2.9
+   replaced. Easy is unchanged. Medium and Hard must be re-measured, and Hard is the
+   one at risk: 18 equations, 36 intersections and six three-digit lines against a
+   grade that used to have seven equations on a 7 x 7. Figures and the decisions
+   that dominated them are in `.learnings/generation-measurements.md`.
+
+   **If Hard cannot generate inside the cap, retreat in this order.** Lower Hard's
+   mask targets first, since density is recoverable and the ladder is asserted on
+   blanks per board rather than on a percentage. Then split its 11-cell lines,
+   accepting 5-cell equations in their place, which removes three-digit values.
+   Change the layout only after both, and change the grid size last. Do not raise
+   the attempt cap: at 5000 it is already 500 times the observed worst case, so
+   exhausting it means something is structurally wrong rather than unlucky.
 5. **A uniqueness check carries a node budget**, because checking is exponential in
    the blank count. Exceeding it answers "not provably unique" rather than guessing,
    so the generator refuses a mask it cannot cheaply prove safe. Correctness is never
@@ -826,14 +970,16 @@ Difficulty rotates by UTC weekday:
 | Tuesday | Easy |
 | Wednesday | Medium |
 | Thursday | Medium |
-| Friday | Hard |
+| Friday | Medium |
 | Saturday | Hard |
-| Sunday | Extreme |
+| Sunday | Hard |
 
-Four grades over seven days, with the week starting gently: two deducible days, two
-more, two that permit guessing, and Extreme once. Sunday holds the hardest so that
-the day a player is most likely to have time for it is the day it appears, and so
-that the grade most likely to break a streak can only do so once a week.
+Three grades over seven days, with the week starting gently: five days that guarantee
+a guess-free route and two that do not. Hard sits on the weekend so that the days a
+player is most likely to have time for it are the days it appears, and so that the
+grade most likely to break a streak can only do so twice a week. Weekdays were the
+place Extreme's removal had to land somewhere; it landed on a third Medium rather
+than a third Hard, because a streak is easier to keep than to restart.
 
 Adjacent dates must not produce adjacent seeds, or consecutive days would give
 visibly similar puzzles. Use an avalanche step, as the sibling's `dailySeed` does.
@@ -1060,9 +1206,36 @@ so it asserts nothing, and this defect sat under 207 passing tests with
 ### 8.1 Theme tokens
 
 Copy `src/styles/tokens.css` from the sibling. Keep the same custom property names,
-the same scale, and the same four-theme model: `system`, `light`, `dark`, and
-`contrast`, selected by a `data-theme` attribute on the root, with
-`prefers-color-scheme` as the default.
+the same scale, and the same theme model: selected by a `data-theme` attribute on the
+root, with `prefers-color-scheme` as the default.
+
+**Nine themes, matching the sibling exactly**: `system`, `light`, `dark`, `contrast`,
+and the five named palettes `football`, `space`, `sweets`, `jungle` and `ocean`. The
+sibling's plan section 8.3 is the authority on all nine; take its values verbatim
+except for the accent, below.
+
+Three rules bind a palette, and a new one has to be checked against all three:
+
+- `--colour-accent` is body text, not decoration. Every entered digit is drawn in it
+  and an active button fills with it, so both directions of that pair need 4.5:1.
+- `--colour-ink` and `--colour-ink-muted` each need 4.5:1 against the surface they
+  sit on.
+- Every palette sets `--colour-error` itself. A single hard-coded red fails on a dark
+  surface: `#b3261e` is 2.46:1 on the dark theme's cell.
+
+Two tokens the sibling does not have must be defined in **all nine** palettes, not
+just the first four: `--colour-group` and `--colour-block`, below. A palette that
+omits either inherits the light value and paints a light block on a dark board.
+
+**Each choice in Settings shows a miniature board in its own palette.** The sibling
+does this with a second selector on every palette rule, `[data-theme-preview='x']`,
+because a preview sits inside a document already painted in another theme and has to
+set the whole palette rather than inherit it. Declare each palette once under a
+selector list naming both forms; a second copy of the colours in TypeScript or in a
+duplicated rule would drift. MathsCross previews a fragment of a board — a block
+cell, a given, an entered digit and a grouped two-cell number — rather than the
+sibling's 3 x 3 box with a pencil mark, because those are the four things a
+MathsCross palette has to distinguish.
 
 Copy `src/features/theme/theme.ts` behaviour exactly, including the detail that
 `system` removes the attribute rather than setting `data-theme="system"`. Setting a
@@ -1078,6 +1251,10 @@ screen or in a task switcher.
 | `--colour-accent` light | `#2f6f4f` | `#3a5fa8` |
 | `--colour-accent` dark | `#6fbf95` | `#8fb0f0` |
 | `--colour-accent` contrast | `#ffd400` | `#ffd400` (unchanged) |
+
+The five named palettes keep the sibling's accents. Their accents are part of what
+makes each palette recognisable — gold on grass, cyan on midnight — and none of them
+is the Sudoku green that the brand rule above exists to avoid.
 
 Keep the contrast theme's accent unchanged. It is chosen for contrast, not for brand,
 and the sibling's comment records that raising contrast is not the same as inverting
@@ -1115,6 +1292,14 @@ Follow `src/styles/layout.css` from the sibling:
   which cannot fit a header, a square board, controls, and a keypad in 390 px of
   height.
 - Size all controls from `--tap-min`, which is 44 px everywhere.
+- **The 44 px floor applies to controls, not to board cells at Hard.** Eleven columns
+  at 44 px is 484 px, and a portrait phone is 390 px wide. Hard's cells therefore
+  shrink to fit, to a floor of 32 px, and the keypad, the header and every button
+  stay at 44 px. This is a real accessibility cost and it is accepted rather than
+  hidden: the board is fully operable from the keypad and the roving tabindex, which
+  is where a player with a large touch target problem is already better served. If a
+  32 px cell proves unusable on a device, the retreat is Hard's grid size, and it is
+  listed in section 5.6 as the last of the four.
 - Give `:focus-visible` a 3 px accent outline.
 - **The board must not move or resize when the selection changes.** Reported by a
   player: clicking between a digit cell and an operator cell moved the board 76.8 px
@@ -1202,8 +1387,8 @@ of that. Any future dependency must state its gzipped cost in the pull request.
 
 ### 8.5 The board
 
-- Render the grid as DOM elements, one element per cell. A 9 x 9 grid is 81 elements,
-  well within DOM performance limits. Do not use canvas. Canvas costs accessibility
+- Render the grid as DOM elements, one element per cell. An 11 x 11 grid is 121
+  elements, well within DOM performance limits. Do not use canvas. Canvas costs accessibility
   and text input for no measurable gain at this size.
 - Every cell renders exactly one character, because a cell holds one digit, one
   operator, or one `=`. Font sizing is therefore uniform and needs no per-puzzle
@@ -1237,7 +1422,7 @@ Hard board has 75% of digits and every operator blank, so a player can enter doz
 of values before discovering a contradiction, and sessions routinely span sittings.
 
 - One undoable action is one cell entry or clear. Never batch.
-- Cap the history at 200 moves. That is comfortably more than any 9 x 9 needs and it
+- Cap the history at 200 moves. That is comfortably more than any 11 x 11 needs and it
   bounds the stored payload against the threshold in section 7.2.
 - **Persist the history with the puzzle**, so undo survives a resume. The moment a
   player most needs undo is immediately after returning to a half-finished board.
@@ -1813,7 +1998,7 @@ Rules:
 
 ### 10.4 `slow.yml` — nightly, on tags, and on demand
 
-The slow suite runs 100 seeds per difficulty across four difficulties. Per the
+The slow suite runs 100 seeds per difficulty across three difficulties. Per the
 sibling's cost model in section 5.6, that is potentially minutes of compute, and it
 grows with any generator regression. Running it on every pull request would tax every
 push for a signal that changes rarely.
@@ -1936,11 +2121,21 @@ For a small fixed seed set per difficulty, assert:
 
 - Every equation satisfies the constraints in section 2.7 for its difficulty.
 - Every division divides exactly.
-- Every number fits its mesh-assigned cell width, with no leading zero.
+- Every number fits its layout-assigned cell width, with no leading zero.
 - Operand widths agree at every intersection.
-- The mesh forms a single connected component, with no two parallel equations in
-  adjacent rows or columns, and every non-`block` cell in at least one equation.
 - Every equation contains at least one operator.
+
+And on the layouts themselves, without generating anything, per difficulty:
+
+- The equation list in `layouts.ts` is exactly the runs of 5 or more non-`block`
+  cells in its grid. A layout that disagrees with its own equation list is a defect.
+- Every non-`block` cell belongs to at least one equation.
+- The equations form a single connected component, with no two parallel equations in
+  adjacent rows or columns.
+- **Every equation has at least one feasible width triple, and some assignment of
+  triples puts a `digit` cell at every intersection.** This is the check that would
+  have caught the Hard layout in section 2.9 at the point it was drawn, rather than
+  as a fill that fails on every seed.
 - The output has exactly one solution.
 - `generate({ seed, difficulty })` called twice returns identical output. This is the
   determinism guard. It must never be skipped or marked flaky.
@@ -1951,6 +2146,9 @@ For a small fixed seed set per difficulty, assert:
 `generate.slow.test.ts`, run by `vitest.slow.config.ts` in `slow.yml`. 100 seeds per
 difficulty. Assert every property in section 13.3, and additionally:
 
+- **Blanks per board never decrease up the ladder.** Easy, then Medium, then Hard.
+  This is the assertion that survives a re-measurement of the mask targets, and it is
+  the one that fails if Hard's density collapses under 36 intersections.
 - **The median achieved mask density is within 10 percentage points of target**, for
   both digits and operators, at every difficulty. Asserted on the median rather than
   per puzzle: individual density varies enough that a per-puzzle check fails on about
@@ -2039,8 +2237,9 @@ Each milestone ends with tests passing in CI.
   operators masked, 16 of 39 digits masked, 34 cells carrying grouping cues, and the
   entry pad swapping between digits and operators as focus moves.
 
-  Recorded as it stood. The grade called Hard here is the one now called Extreme, and
-  there were three grades rather than four — see section 14.3.
+  Recorded as it stood. The grade called Hard here is the one the re-grade renamed
+  Extreme and M8 removed, and there were three grades rather than four — see sections
+  14.3 and 2.7.
 
   Generation itself, negative values, division and operator masking all landed at
   M2, and Hard's masking percentages were settled there by measurement rather than
@@ -2119,6 +2318,24 @@ Each milestone ends with tests passing in CI.
   `native/README.md`: the screenshots, which cannot be captured until the app runs
   in the shell; low-end device testing; and the first manual Play submission. The
   contact email Play requires is also unset.
+
+- **M8 — Fixed layouts, three grades, nine themes.** The revision this section was
+  extended for. Four deliverables, in dependency order:
+
+  1. `src/engine/layouts.ts` holding the three layouts of section 2.9 and their
+     equation lists, the width assignment replacing the mesh search, and the layout
+     assertions in section 13.3.
+  2. Extreme removed from the difficulty table, the daily rotation, the menu, stats
+     and persistence, including whatever a stored settings or stats value from an
+     earlier version says. Division and 100% operator masking become unused engine
+     capability, kept and tested.
+  3. Hard's mask targets re-measured and reset, per section 2.7, with the slow-suite
+     figures rewritten in `.learnings/generation-measurements.md`. The retreat order
+     in section 5.6 applies if the cap cannot be met.
+  4. The five named palettes from the sibling, their previews in Settings, and
+     `--colour-group` and `--colour-block` defined in all nine.
+
+  The board also has to render 11 x 11 within a phone viewport, per section 8.2.
 
 ### 14.1 M0.5 — the playtest gate
 
@@ -2210,6 +2427,10 @@ tuning the ratios, which measurement showed does nothing on its own.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
+| Hard cannot generate inside the attempt cap on 11 x 11 | The top grade is unplayable, or generation blocks the worker for seconds | Measured at M8 with a four-step retreat defined in section 5.6, starting with mask density and ending with grid size. The cap is not raised |
+| A hand-drawn layout admits no consistent width assignment | The fill fails on every seed, and the symptom points at the fill rather than the layout | Asserted against the layout table in the fast suite, per section 13.3. One layout has already failed this way; section 2.9 records it |
+| An 11 x 11 board is unreadable or untappable on a phone | Hard is shipped and unplayable on the device most players use | 32 px cell floor and the keypad route in section 8.2, checked on a real device before release |
+| A named palette omits `--colour-block` or `--colour-group` | A light block cell on a dark board, in five themes nobody tested | Both tokens required in all nine palettes, per section 8.1, with a test that every palette defines every token |
 | The mechanic is not enjoyable | Every milestone after M2 is wasted | M0.5 gates M2, with a defined criterion and a costed pivot. Sections 14.1 and 14.2 |
 | Hard's 100% operator masking is unsolvable or unfun | The top of the difficulty ladder is unusable | Demoted to a hypothesis in section 2.7, tested by hand at M0.5, expected to settle at 60 to 70% |
 | Uniqueness forces so many cells back that Hard becomes Medium | The ladder silently collapses and nobody notices | Achieved mask density reported by the generator and asserted within 10 points in section 13.4 |
@@ -2255,9 +2476,13 @@ and recorded in the section named below.
 | Value ranges | Derived from equation length; original figures unreachable and accepted | 2.6 |
 | Kids tier | Deferred to release 2 | 1.5, 17 |
 | Easy grid size | 5 x 5, and the entry point | 2.7 |
-| Extreme operator masking | 100%, measured and reached, once operators mask first | 2.7 |
-| Negative values by difficulty | Off at Easy and Medium, on at Hard and Extreme | 2.7 |
-| Difficulty grades | Four. Easy, Medium, Hard, Extreme | 2.7 |
+| Operator masking order | Operators before digits. Whichever kind masks first spends the uniqueness budget | 2.7, 5.4 |
+| Negative values | Nominally on at Hard, and inert everywhere: no layout places a sign cell | 2.9 |
+| Difficulty grades | Three. Easy, Medium, Hard | 2.7 |
+| Board shape | Fixed, hand-drawn, one layout per difficulty. No mesh search | 2.9 |
+| Hard grid size | 11 x 11, with 32 px cells on a phone | 2.9, 8.2 |
+| Division | Unused by every difficulty. Engine support kept and tested | 2.7 |
+| Themes | Nine, matching the sibling, with previews | 8.1 |
 | Guess-free guarantee | Enforced at Easy and Medium, per masked cell | 2.7 |
 | Degenerate arithmetic | Identities and annihilators rejected at every grade | 2.7.1 |
 | Undo | In scope. 200 moves, single-cell, persisted | 8.6 |
@@ -2319,6 +2544,8 @@ scope.
 
 | Item | Why deferred | What would trigger it |
 |---|---|---|
+| An Extreme grade | Removed at M8 with the layouts. Its two distinguishing features, division and 100% operator masking, are engine capability that nothing exercises | A fourth layout in section 2.9. It is a difficulty-table entry and a picture, not an engine change |
+| Negative results | The layouts place no sign cell, so no result can be written negative and Hard's `allowNegative` has never changed an output. The parser, evaluator and solver already handle sign cells | A layout that declares an operator cell immediately after its equals cell. Section 2.9 |
 | Kids tier | One digit per cell forced it to 5 x 5 single-digit, leaving it near-identical to Easy. It cost its own generation tuning, play-testing, an enlarged touch target, and the families declaration | A real child audience, or a decision to widen the ladder downward. Would likely need a mechanic tweak rather than only a parameter change, since 5 x 5 is already the minimum viable grid |
 | Tile placement mode | A variant in the original specification, not the primary mechanic. Doubles the input model and the solver's job | Release 1 ships and the primary mechanic proves durable |
 | Hints | Needs the solver's deduction log, which section 6.3 already records, plus a UI for revealing a single deduction rather than an answer | Player feedback that Hard is impassable rather than hard |
