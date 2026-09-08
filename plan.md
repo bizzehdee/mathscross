@@ -1516,6 +1516,11 @@ Do not add one without stating the current problem it solves.
   `<allow-navigation>` in `config.xml`, and `connect-src 'none'` in the CSP below,
   which the browser enforces at runtime. The store text claims no network requests,
   not an empty permission list — section 11.3.
+- Set `AndroidEdgeToEdge` to `true`. With it off, cordova-android gives the webview a
+  margin of the status bar height *and* reports the same inset to
+  `env(safe-area-inset-top)`, which section 8.1's layout already pads by — so every
+  screen avoids the status bar twice. Insets belong in CSS, applied once, as they are
+  on iOS and the web. See `.learnings/cordova-android-double-inset.md`.
 - Set a Content-Security-Policy meta tag in `src/index.html` forbidding remote
   script, style, and connection sources.
 - Target the API level and build tools that the pinned `cordova-android` version

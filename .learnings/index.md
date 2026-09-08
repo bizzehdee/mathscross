@@ -58,6 +58,11 @@ true on one machine only. See
 
 ## Platform and storage
 
+- [cordova-android-double-inset.md](cordova-android-double-inset.md) — with
+  `AndroidEdgeToEdge` off, cordova-android both insets the webview by the status bar
+  height and reports that inset to `env(safe-area-inset-top)`, so a page that pads by
+  it avoids the status bar twice. Read before touching safe-area padding or any gap
+  at the edge of a native screen.
 - [native-shell-origin.md](native-shell-origin.md) — a Cordova shell must serve from
   `https://localhost`, not `file://`, or `localStorage` is not durable and there is
   no secure context. The failure is silent. Read before touching `native/config.xml`

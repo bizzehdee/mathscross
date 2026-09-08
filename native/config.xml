@@ -90,6 +90,31 @@
           only after an upgrade. See .learnings/native-shell-origin.md.
         -->
         <!--
+          Edge to edge, which zeroes the margins cordova-android would otherwise
+          give the webview.
+
+          Without this, `CordovaActivity.createViews` sets the webview's top
+          margin to the status bar height while still calling
+          `setDecorFitsSystemWindows(window, false)` and passing the insets down
+          unconsumed. The webview then starts below the status bar *and*
+          `env(safe-area-inset-top)` reports that same height, which
+          styles/layout.css adds to #app's padding — so the status bar is avoided
+          twice and the gap above the title is double what it should be. That is
+          the gap reported on the menu screen.
+
+          On, every inset is applied exactly once, in CSS, where iOS and the
+          browser build already apply it.
+
+          It also makes the status bar background transparent, and
+          cordova-android picks the icon colour from the device's light or dark
+          mode rather than from the app's theme. A player whose theme contradicts
+          their phone's mode can get low-contrast status bar icons; driving the
+          system bars from the app's theme needs runtime calls and is a feature,
+          not part of this. See ../.learnings/cordova-android-double-inset.md.
+        -->
+        <preference name="AndroidEdgeToEdge" value="true" />
+
+        <!--
           The INTERNET permission cordova-android declares by default must stay.
           The asset loader below serves the bundle over an https origin, and the
           WebView refuses an http(s) load outright when the app does not hold the
